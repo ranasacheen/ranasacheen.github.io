@@ -247,3 +247,74 @@ document.getElementById('runScan').addEventListener('click', async () => {
     btn.style.opacity = "1";
     console.log("Updated Data with CAD Prices:", myToolData);
 });
+
+
+
+//for fc with text area
+// 1. THE UI
+const ui = document.createElement('div');
+ui.innerHTML = `
+    <div id="priceScanner" style="position:fixed; top:20px; right:20px; z-index:10000; background:#fff; border:2px solid #232f3e; padding:15px; border-radius:10px; box-shadow:0 8px 24px rgba(0,0,0,0.2); width:320px; font-family: sans-serif;">
+        <h3 style="margin:0 0 10px 0; font-size:14px; color:#e47911;">🇨🇦 Amazon.ca Bulk Scanner</h3>
+        
+        <textarea id="bulkAsins" style="width:100%; height:80px; font-size:12px; border:1px solid #ccc; border-radius:4px; padding:5px;" placeholder="Enter ASINs (one per line)"></textarea>
+        
+        <button id="runScan" style="width:100%; background:#ffd814; border:1px solid #fcd200; border-radius:8px; padding:10px; cursor:pointer; font-weight:bold; margin-top:10px;">Start Calculation</button>
+        
+        <div id="log" style="margin-top:12px; max-height:150px; overflow-y:auto; font-size:11px; border-top:1px solid #eee; padding-top:8px;"></div>
+    </div>
+`;
+document.body.appendChild(ui);
+
+// 2. THE LOGIC
+document.getElementById('runScan').addEventListener('click', async () => {
+    const textArea = document.getElementById('bulkAsins');
+    const log = document.getElementById('log');
+    
+    // This is the JSON object where we will store the results
+    const productResults = {
+        scanDate: new Date().toLocaleString(),
+        items: []
+    };
+
+    const asins = textArea.value.split('\n').map(a => a.trim()).filter(a => a.length > 5);
+    log.innerHTML = `<em>Scanning ${asins.length} items...</em>`;
+
+    for (const asin of asins) {
+        log.innerHTML += `<div>🔍 Checking ${asin}...</div>`;
+        
+        try {
+            const response = await fetch(`https://www.amazon.ca/dp/${asin}`);
+            const html = await response.text();
+            const doc = new DOMParser().parseFromString(html, "text/html");
+
+            // Selectors for 2026 Amazon.ca layout
+            const priceEl = doc.querySelector('#corePriceDisplay_desktop_feature_div .a-offscreen') || 
+                          doc.querySelector('.a-price .a-offscreen');
+
+            if (priceEl) {
+                const priceText = priceEl.innerText.trim();
+                
+                // Pushing data into our JSON object
+                productResults.items.push({
+                    asin: asin,
+                    price: priceText,
+                    numericValue: parseFloat(priceText.replace(/[^0-9.]/g, ''))
+                });
+
+                log.innerHTML += `<div style="color:green;">✅ Saved: ${priceText}</div>`;
+            } else {
+                log.innerHTML += `<div style="color:red;">❌ Price not found for ${asin}</div>`;
+            }
+        } catch (e) {
+            log.innerHTML += `<div style="color:red;">⚠️ Connection Error</div>`;
+        }
+
+        // Wait 3 seconds to avoid blocking
+        await new Promise(r => setTimeout(r, 3000));
+    }
+
+    // FINAL OUTPUT: Print the JSON object to the console
+    console.log("FINAL JSON OBJECT:", productResults);
+    log.innerHTML += `<hr><strong>Finished! Check Console (F12) for the JSON data.</strong>`;
+});
