@@ -69,7 +69,8 @@ document.getElementById('startScan').addEventListener('click', async () => {
 });
 
 
-//for the totes
+//for the totes multiple Ansci with quantity
+
 
 // 1. Create the UI (Added a Total display)
 const ui = document.createElement('div');
@@ -145,4 +146,104 @@ document.getElementById('startScan').addEventListener('click', async () => {
         await new Promise(r => setTimeout(r, 2500)); // Delay to prevent bans
     }
     log.innerHTML += "<div><strong>Calculation Finished.</strong></div>";
+});
+
+
+//for fc
+// 1. DATA SOURCE
+
+const myToolData = {
+    "products": [
+        {"id": "A1", "asin": "B08N5Z6HGT"}, 
+        {"id": "A2", "asin": "B07PFFMP9P"}
+    ]
+};
+
+// 2. THE UI
+const ui = document.createElement('div');
+ui.innerHTML = `
+    <div id="priceScanner" style="position:fixed; top:20px; right:20px; z-index:10000; background:#fff; border:2px solid #232f3e; padding:15px; border-radius:10px; box-shadow:0 8px 24px rgba(0,0,0,0.2); width:320px; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+            <h3 style="margin:0; font-size:15px; color:#e47911;">🇨🇦 Amazon.ca Price Grabber</h3>
+            <span id="closeScanner" style="cursor:pointer; font-weight:bold; color:#999;">✕</span>
+        </div>
+        <div id="progressBox" style="font-size:12px; margin-bottom:10px; color:#555;">Ready to scan ${myToolData.products.length} items.</div>
+        <button id="runScan" style="width:100%; background:#ffd814; border:1px solid #fcd200; border-radius:8px; padding:10px; cursor:pointer; font-weight:bold; transition: 0.2s;">Start Scan</button>
+        <div id="log" style="margin-top:12px; max-height:220px; overflow-y:auto; font-size:11px; border-top:1px solid #eee; padding-top:8px;"></div>
+    </div>
+`;
+document.body.appendChild(ui);
+document.getElementById('closeScanner').onclick = () => ui.remove();
+
+// 3. THE LOGIC
+document.getElementById('runScan').addEventListener('click', async () => {
+    const log = document.getElementById('log');
+    const progress = document.getElementById('progressBox');
+    const btn = document.getElementById('runScan');
+    
+    btn.disabled = true;
+    btn.style.opacity = "0.5";
+    log.innerHTML = "";
+    
+    for (let i = 0; i < myToolData.products.length; i++) {
+        const item = myToolData.products[i];
+        const asin = item.asin;
+        
+        progress.innerText = `Scanning item ${i + 1} of ${myToolData.products.length}...`;
+        log.innerHTML += `<div style="margin-bottom:4px;">🔍 Checking <strong>${asin}</strong>...</div>`;
+        log.scrollTop = log.scrollHeight;
+
+        try {
+            // Fetching Amazon.ca product page
+            const response = await fetch(`https://www.amazon.ca/dp/${asin}?psc=1&_=${Date.now()}`);
+            const html = await response.text();
+
+            if (html.includes("robot-check") || html.includes("api-services-support")) {
+                log.innerHTML += `<div style="color:orange; border-left:3px solid orange; padding-left:5px;">⚠️ CAPTCHA detected. Please solve a CAPTCHA on Amazon.ca and restart.</div>`;
+                break;
+            }
+
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(html, "text/html");
+
+            // Updated 2026 CSS Selectors
+            const selectors = [
+                '#corePriceDisplay_desktop_feature_div .a-offscreen',
+                '#corePrice_feature_div .a-offscreen',
+                '.a-price .a-offscreen',
+                '#price_inside_buybox',
+                '#kindle-price',
+                'span[data-a-color="price"]'
+            ];
+
+            let price = "N/A";
+            for (let s of selectors) {
+                const el = doc.querySelector(s);
+                if (el && el.innerText.trim()) {
+                    price = el.innerText.trim();
+                    break;
+                }
+            }
+
+            if (price !== "N/A") {
+                log.innerHTML += `<div style="color:#2e7d32;">✅ Price: <strong>${price}</strong></div>`;
+                item.price_cad = price; // Save price back to your object
+            } else {
+                log.innerHTML += `<div style="color:#d32f2f;">❌ Out of stock or hidden.</div>`;
+            }
+
+        } catch (error) {
+            log.innerHTML += `<div style="color:red;">⚠️ Error fetching ${asin}</div>`;
+        }
+
+        // --- BOT PROTECTION BYPASS ---
+        // Randomized delay between 2.5 and 5 seconds
+        const jitter = Math.floor(Math.random() * 2500) + 2500;
+        await new Promise(r => setTimeout(r, jitter));
+    }
+
+    progress.innerText = "Scan Complete!";
+    btn.disabled = false;
+    btn.style.opacity = "1";
+    console.log("Updated Data with CAD Prices:", myToolData);
 });
