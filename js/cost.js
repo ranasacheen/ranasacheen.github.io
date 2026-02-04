@@ -438,3 +438,113 @@ const gmFetch = (url) => {
 
 calculateTotal();
 
+
+
+        /////----------
+
+
+// ==UserScript==
+// @name         FC Research Price Calculator
+// @match        https://fcresearch-na.aka.amazon.com/*
+// @grant        GM_xmlhttpRequest
+// @connect      amazon.ca
+// @connect      fcresearch-na.aka.amazon.com
+// ==/UserScript==
+
+(function() {
+    'use strict';
+
+    // 1. Create the UI
+    const container = document.createElement('div');
+    container.style = "position: fixed; top: 10px; right: 10px; z-index: 9999; background: white; border: 2px solid #232f3e; padding: 10px; display: flex; flex-direction: column; gap: 5px; box-shadow: 0px 4px 10px rgba(0,0,0,0.3);";
+    
+    container.innerHTML = `
+        <b style="color: #232f3e;">Batch Price Scraper</b>
+        <textarea id="batch-ids" placeholder="Enter codes (e.g. cSXNW) one per line" rows="5" style="width: 200px;"></textarea>
+        <button id="start-btn" style="background: #febd69; border: 1px solid #a88734; cursor: pointer; padding: 5px;">Calculate Total</button>
+        <div id="status-log" style="font-size: 11px; max-width: 200px; color: #555;">Ready.</div>
+    `;
+    document.body.appendChild(container);
+
+    // Helper: Promisified GM Request
+    const gmFetch = (url) => {
+        return new Promise((resolve, reject) => {
+            GM_xmlhttpRequest({
+                method: "GET",
+                url: url,
+                onload: (res) => resolve(res.responseText),
+                onerror: (err) => reject(err)
+            });
+        });
+    };
+
+    // Helper: Wait for an element to appear
+    const waitForElement = (selector) => {
+        return new Promise(resolve => {
+            const interval = setInterval(() => {
+                const el = document.querySelector(selector);
+                if (el) {
+                    clearInterval(interval);
+                    resolve(el);
+                }
+            }, 500);
+        });
+    };
+
+    document.getElementById('start-btn').addEventListener('click', async () => {
+        const input = document.getElementById('batch-ids').value.trim();
+        const codes = input.split('\n').map(s => s.trim()).filter(s => s);
+        const log = document.getElementById('status-log');
+        
+        if (codes.length === 0) return alert("Please enter at least one code.");
+
+        let grandTotal = 0;
+
+        for (const code of codes) {
+            log.innerText = `Processing: ${code}...`;
+            
+            try {
+                // Step 1: Fetch the FC Research Page for this code
+                const researchUrl = `https://fcresearch-na.aka.amazon.com/YHM1/result?s=${code}`;
+                const resPageHtml = await gmFetch(researchUrl);
+                
+                // Parse the FC Research page to find product IDs (B0...)
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(resPageHtml, 'text/html');
+                
+                // Look for anything that looks like an ASIN in the table cells
+                const cells = Array.from(doc.querySelectorAll('td, span, a'));
+                const asins = [...new Set(cells.map(c => c.innerText.trim()).filter(t => /^B0[A-Z0-9]{8}$/.test(t)))];
+
+                log.innerText = `Found ${asins.length} items in ${code}. Fetching prices...`;
+
+                for (const asin of asins) {
+                    try {
+                        const amzUrl = `https://www.amazon.ca/gp/product/${asin}?th=1`;
+                        const amzHtml = await gmFetch(amzUrl);
+                        const amzDoc = parser.parseFromString(amzHtml, 'text/html');
+                        const priceEl = amzDoc.querySelector('.a-price-whole');
+
+                        if (priceEl) {
+                            const price = parseFloat(priceEl.innerText.replace(/[^0-9.]/g, ''));
+                            grandTotal += price;
+                            console.log(`ASIN: ${asin} | Price: $${price}`);
+                        }
+                    } catch (e) { console.error(`Error fetching price for ${asin}`); }
+                }
+
+            } catch (err) {
+                console.error(`Error processing code ${code}:`, err);
+            }
+        }
+
+        log.innerHTML = `<b style="color: green;">Done! Total: $${grandTotal.toFixed(2)}</b>`;
+        console.log(`%c Final Total: $${grandTotal.toFixed(2)} `, 'background: #222; color: #bada55; font-size: 20px');
+    });
+
+})();
+
+
+
+        
+
