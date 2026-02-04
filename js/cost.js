@@ -365,67 +365,63 @@ async function calculateTotal() {
 calculateTotal();
 // ------
 
+// ==UserScript==
+// @name         Amazon Price Calculator
+// @grant        GM_xmlhttpRequest
+// @connect      amazon.ca
+// ==/UserScript==
 
-(function() {
-    // 1. Create the container
-    const container = document.createElement('div');
-    container.style.cssText = `
-        position: fixed; top: 10px; right: 10px; z-index: 9999;
-        background: white; border: 2px solid #232f3e; padding: 15px;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.3); width: 350px; border-radius: 8px;
-        font-family: Arial, sans-serif;
-    `;
+// Helper function to make GM_xmlhttpRequest behave like fetch
+const gmFetch = (url) => {
+    return new Promise((resolve, reject) => {
+        GM_xmlhttpRequest({
+            method: "GET",
+            url: url,
+            onload: (response) => resolve(response.responseText),
+            onerror: (error) => reject(error)
+        });
+    });
+};
 
-    // 2. Create the Textarea
-    const textarea = document.createElement('textarea');
-    textarea.placeholder = "Paste ASINs or HTML here...";
-    textarea.style.cssText = "width: 100%; height: 150px; margin-bottom: 10px; display: block;";
-    
-    // 3. Create the Button
-    const btn = document.createElement('button');
-    btn.innerText = "Calculate Total Price";
-    btn.style.cssText = "width: 100%; padding: 10px; background: #febd69; border: 1px solid #a88734; cursor: pointer; font-weight: bold;";
+async function calculateTotal() {
+    const table = document.getElementById('table-inventory');
+    if (!table) return console.error("Table not found!");
 
-    // 4. Create the Output Log
-    const log = document.createElement('div');
-    log.style.cssText = "margin-top: 10px; max-height: 150px; overflow-y: auto; font-size: 12px; border-top: 1px solid #ddd; padding-top: 5px;";
-    log.innerText = "Waiting for input...";
+    const idElements = Array.from(table.querySelectorAll('td')); 
+    const ids = [...new Set(idElements.map(el => el.innerText.trim()).filter(text => text.startsWith('B0')))];
 
-    container.append(textarea, btn, log);
-    document.body.appendChild(container);
+    console.log(`Found ${ids.length} unique products. Fetching prices...`);
 
-    // 5. The Logic
-    btn.onclick = async () => {
-        const ids = [...new Set(textarea.value.match(/B0[A-Z0-9]{8}/g))];
-        if (!ids.length) return log.innerText = "No ASINs found!";
-        
-        let total = 0;
-        log.innerText = `Starting... Found ${ids.length} items.\n`;
+    let totalPrice = 0;
+    const results = [];
 
-        for (const id of ids) {
-            log.innerText += `\nFetching ${id}...`;
-            try {
-                const response = await fetch(`https://www.amazon.ca/gp/product/${id}`);
-                const html = await response.text();
-                const doc = new DOMParser().parseFromString(html, 'text/html');
-                const priceEl = doc.querySelector('.a-price .a-offscreen') || doc.querySelector('.a-price-whole');
-                
-                if (priceEl) {
-                    const price = parseFloat(priceEl.innerText.replace(/[^0-9.]/g, ''));
-                    total += price;
-                    log.innerText += ` ✅ $${price}`;
-                } else {
-                    log.innerText += ` ❌ Price not found`;
-                }
-            } catch (e) {
-                log.innerText += ` ⚠️ Error`;
+    for (const id of ids) {
+        try {
+            const url = `https://www.amazon.ca/gp/product/${id}?th=1`;
+            
+            // Replaced fetch with our GM wrapper
+            const html = await gmFetch(url);
+            
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(html, 'text/html');
+            const priceElement = doc.querySelector('.a-price-whole');
+
+            if (priceElement) {
+                const price = parseFloat(priceElement.innerText.replace(/[^0-9.]/g, ''));
+                results.push({ id, price });
+                totalPrice += price;
+                console.log(`ID: ${id} | Price: $${price}`);
+            } else {
+                console.warn(`Could not find price for ${id}`);
             }
-            // Anti-bot delay
-            await new Promise(r => setTimeout(r, 1500));
+        } catch (err) {
+            console.error(`Error fetching ${id}:`, err);
         }
-        log.innerText += `\n\nDONE! Total: $${total.toFixed(2)}`;
-    };
-})();
+    }
 
+    console.table(results);
+    console.log(`%c Total Price for tsXOj202c8j: $${totalPrice.toFixed(2)} `, 'background: #222; color: #bada55; font-size: 20px');
+}
 
+calculateTotal();
 
