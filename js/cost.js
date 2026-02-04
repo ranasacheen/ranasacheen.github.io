@@ -544,6 +544,12 @@ calculateTotal();
 
 })();
 
+// 1. Target only elements inside your specific table wrapper
+const container = document.getElementById('table-inventory_wrapper');
+
+// 2. Select the elements and filter for those containing "BO"
+const cells = Array.from(container.querySelectorAll('td, span, a'))
+  .filter(el => el.innerText.includes('BO'));
 
 
         
