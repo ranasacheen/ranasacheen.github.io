@@ -383,7 +383,20 @@ const gmFetch = (url) => {
     });
 };
 
-async function calculateTotal() {
+
+    async function calculateTotal() {
+    // Wait for the table to exist before proceeding
+    const table = await new Promise(resolve => {
+        const check = setInterval(() => {
+            const el = document.getElementById('table-inventory');
+            if (el) {
+                clearInterval(check);
+                resolve(el);
+            }
+        }, 500); // Checks every 500ms
+
+
+
     const table = document.getElementById('table-inventory');
     if (!table) return console.error("Table not found!");
 
