@@ -50,7 +50,7 @@ const quizData = [
     { q: "Which of the following is a 'Zone of Fish' in periapical inflammation?", o: ["Zone of infection", "Zone of contamination", "Zone of irritation", "All of the above"], a: 3 },
     { q: "What is the 'Ludwig’s Angina'?", o: ["A localized abscess", "A cellulitis involving submandibular, sublingual, and submental spaces", "A heart condition", "A type of sinus infection"], a: 1 },
     { q: "Apexogenesis is indicated for:", o: ["Necrotic pulp in immature teeth", "Vital pulp in immature teeth", "Necrotic pulp in mature teeth", "Deciduous teeth only"], a: 1 }
-];
+]
 
 const currentQNum = document.getElementById('current-q-num');
 const liveScore = document.getElementById('live-score');
