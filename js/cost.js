@@ -52,18 +52,17 @@ const quizData = [
     { q: "Apexogenesis is indicated for:", o: ["Necrotic pulp in immature teeth", "Vital pulp in immature teeth", "Necrotic pulp in mature teeth", "Deciduous teeth only"], a: 1 }
 ];
 
-let currentIdx = 0;
-let score = 0;
-
-const qText = document.getElementById('question-text');
-const oContainer = document.getElementById('options-container');
-const nextBtn = document.getElementById('next-btn');
-const resultsDiv = document.getElementById('results');
+const currentQNum = document.getElementById('current-q-num');
+const liveScore = document.getElementById('live-score');
 
 function loadQuestion() {
     resetState();
+    // Update status display
+    currentQNum.innerText = currentIdx + 1;
+    liveScore.innerText = score;
+
     let currentQ = quizData[currentIdx];
-    qText.innerText = `${currentIdx + 1}. ${currentQ.q}`;
+    document.getElementById('question-text').innerText = `${currentIdx + 1}. ${currentQ.q}`;
     
     currentQ.o.forEach((option, index) => {
         const button = document.createElement('button');
@@ -74,45 +73,20 @@ function loadQuestion() {
     });
 }
 
-function resetState() {
-    nextBtn.classList.add('hide');
-    while (oContainer.firstChild) {
-        oContainer.removeChild(oContainer.firstChild);
-    }
-}
-
 function selectAnswer(index) {
     const buttons = oContainer.querySelectorAll('.btn');
     const correct = quizData[currentIdx].a;
     
-    // Disable all buttons so user can't change answer
     buttons.forEach(btn => btn.style.pointerEvents = 'none');
 
     if (index === correct) {
         score++;
         buttons[index].classList.add('correct');
+        liveScore.innerText = score; // Update score immediately
     } else {
         buttons[index].classList.add('error');
-        // Optional: Show the correct answer even if they missed it
         buttons[correct].classList.add('correct');
     }
     
     nextBtn.classList.remove('hide');
 }
-
-nextBtn.addEventListener('click', () => {
-    currentIdx++;
-    if (currentIdx < quizData.length) {
-        loadQuestion();
-    } else {
-        showResults();
-    }
-});
-
-function showResults() {
-    document.getElementById('question-container').classList.add('hide');
-    resultsDiv.classList.remove('hide');
-    document.getElementById('score-text').innerText = `You scored ${score} out of ${quizData.length}`;
-}
-
-loadQuestion();
