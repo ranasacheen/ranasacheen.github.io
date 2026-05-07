@@ -90,3 +90,4 @@ function selectAnswer(index) {
     
     nextBtn.classList.remove('hide');
 }
+loadQuestion();
