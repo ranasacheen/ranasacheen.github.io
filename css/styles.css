@@ -4740,3 +4740,9 @@ td:last-child {
 .contact-list li {
 	padding-left: 0;
 }
+	body { font-family: sans-serif; background: #f4f4f9; display: flex; justify-content: center; padding: 20px; }
+.quiz-container { background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); width: 100%; max-width: 500px; }
+.btn { display: block; width: 100%; padding: 10px; margin: 10px 0; border: 1px solid #ccc; border-radius: 4px; cursor: pointer; text-align: left; }
+.btn:hover { background: #e0f0ff; }
+.hide { display: none; }
+#next-btn { background: #1a5276; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; float: right; }
