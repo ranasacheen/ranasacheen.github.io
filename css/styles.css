@@ -112,3 +112,22 @@ h1 {
 #question-container {
     animation: fadeIn 0.5s ease;
 }
+/* Feedback Styles */
+.btn.correct {
+    border-color: var(--success-color) !important;
+    background-color: #e8f5e9 !important; /* Light green tint */
+    color: var(--success-color);
+    font-weight: bold;
+}
+
+.btn.error {
+    border-color: var(--error-color) !important;
+    background-color: #ffebee !important; /* Light red tint */
+    color: var(--error-color);
+    font-weight: bold;
+}
+
+/* Ensure buttons don't look clickable after selection */
+.btn:disabled {
+    cursor: default;
+}
