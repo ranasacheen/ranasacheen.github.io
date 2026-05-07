@@ -1,87 +1,71 @@
-// ==UserScript==
-// @name         Price Updater Pro
-// @namespace    http://tampermonkey.net/
-// @version      0.1
-// @description  Fetch prices from GrabbOO and Amazon
-// @author       You
-// @match        *://www.maincalculator.com/*
-// @grant        GM_xmlhttpRequest
-// @connect      grabboo.com
-// @connect      amazon.com
-// ==/UserScript==
-
-(function() {
-    'use strict';
-
-    // 1. Create and Add the Button
-    const btn = document.createElement('button');
-    btn.innerHTML = "🚀 Sync Amazon Prices";
-    btn.style.cssText = "position:fixed; top:20px; right:20px; z-index:9999; padding:10px; cursor:pointer;";
-    document.body.appendChild(btn);
-
-    // Helper function to handle cross-origin requests
-    function fetchExternal(url) {
-        return new Promise((resolve, reject) => {
-            GM_xmlhttpRequest({
-                method: "GET",
-                url: url,
-                onload: (res) => resolve(new DOMParser().parseFromString(res.responseText, "text/html")),
-                onerror: (err) => reject(err)
-            });
-        });
+// Array containing a sample of the 50 questions generated[cite: 1, 2]
+const quizData = [
+    {
+        q: "Which cell type is responsible for the formation of a dentinal bridge after pulp capping with MTA?",
+        o: ["Primary Odontoblasts", "Replacement Odontoblast-like cells", "Fibroblasts", "Macrophages"],
+        a: 1 // Index of "Replacement Odontoblast-like cells"[cite: 2]
+    },
+    {
+        q: "The 'danger zone' in mandibular molars, susceptible to strip perforation, is located:",
+        o: ["Mesial surface", "Distal surface of distal root", "Distal surface of mesial root", "Furcation area"],
+        a: 2 // Index of "Distal surface of mesial root"[cite: 2]
     }
+    // Add the remaining 48 questions here using the same format
+];
 
-    btn.onclick = async () => {
-        btn.disabled = true;
-        btn.innerText = "Processing...";
+let currentIdx = 0;
+let score = 0;
 
-        const tables = document.querySelectorAll('table');
+const qText = document.getElementById('question-text');
+const oContainer = document.getElementById('options-container');
+const nextBtn = document.getElementById('next-btn');
+const resultsDiv = document.getElementById('results');
 
-        for (let table of tables) {
-            const rows = Array.from(table.querySelectorAll('tbody tr'));
-            let tableSum = 0;
+function loadQuestion() {
+    resetState();
+    let currentQ = quizData[currentIdx];
+    qText.innerText = `${currentIdx + 1}. ${currentQ.q}`;
+    
+    currentQ.o.forEach((option, index) => {
+        const button = document.createElement('button');
+        button.innerText = option;
+        button.classList.add('btn');
+        button.addEventListener('click', () => selectAnswer(index));
+        oContainer.appendChild(button);
+    });
+}
 
-            for (let row of rows) {
-                const cells = row.querySelectorAll('td');
-                if (cells.length < 4) continue; // Skip total row
+function resetState() {
+    nextBtn.classList.add('hide');
+    while (oContainer.firstChild) {
+        oContainer.removeChild(oContainer.firstChild);
+    }
+}
 
-                const linkElement = cells[0].querySelector('a');
-                let price = parseFloat(cells[1].innerText);
-                const quantity = parseInt(cells[2].innerText) || 0;
+function selectAnswer(index) {
+    const correct = quizData[currentIdx].a;
+    if (index === correct) {
+        score++;
+        alert("Correct!");
+    } else {
+        alert("Wrong Answer!");
+    }
+    nextBtn.classList.remove('hide');
+}
 
-                if (price === 0 || isNaN(price)) {
-                    try {
-                        // Step A: Visit GrabbOO via the link in the table
-                        const grabDoc = await fetchExternal(linkElement.href);
-                        // REPLACE '.ansci-id-selector' with the actual class/ID on grabbOO
-                        const b0Code = grabDoc.querySelector('.ansci-id-selector')?.innerText.trim();
+nextBtn.addEventListener('click', () => {
+    currentIdx++;
+    if (currentIdx < quizData.length) {
+        loadQuestion();
+    } else {
+        showResults();
+    }
+});
 
-                        if (b0Code) {
-                            // Step B: Visit Amazon
-                            const amzDoc = await fetchExternal(`https://www.amazon.com/gb/dp/${b0Code}`);
-                            const priceText = amzDoc.querySelector('.a-price-whole')?.innerText;
-                            
-                            if (priceText) {
-                                price = parseFloat(priceText.replace(/[^0-9.]/g, ''));
-                                cells[1].innerText = price;
-                            }
-                        }
-                    } catch (e) { console.error("Update failed for row", e); }
-                }
+function showResults() {
+    document.getElementById('question-container').classList.add('hide');
+    resultsDiv.classList.remove('hide');
+    document.getElementById('score-text').innerText = `You scored ${score} out of ${quizData.length}`;
+}
 
-                // Step C: Update Math
-                const rowTotal = price * quantity;
-                cells[3].innerText = rowTotal;
-                tableSum += rowTotal;
-            }
-
-            // Step D: Update the Sum Footer
-            const footer = table.querySelector('td[colspan="4"]');
-            if (footer) footer.innerText = tableSum;
-        }
-
-        btn.disabled = false;
-        btn.innerText = "🚀 Sync Amazon Prices";
-        alert("Update Complete!");
-    };
-})();
+loadQuestion();
