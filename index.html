@@ -7,19 +7,19 @@
     <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
-    <div class="quiz-container">
-        <h1>ADAT Endodontics Practice</h1>
-        <div id="question-container">
-            <p id="question-text">Loading question...</p>
-            <div id="options-container"></div>
-        </div>
-        <button id="next-btn" class="hide">Next Question</button>
-        <div id="results" class="hide">
-            <h2>Quiz Complete!</h2>
-            <p id="score-text"></p>
-            <button onclick="location.reload()">Restart Quiz</button>
-        </div>
+   <div class="quiz-container">
+    <h1>ADAT Endodontics Practice</h1>
+    <!-- New Status Bar -->
+    <div id="quiz-status">
+        <span>Question: <b id="current-q-num">1</b>/50</span>
+        <span>Score: <b id="live-score">0</b></span>
     </div>
+    <div id="question-container">
+        <p id="question-text">Loading question...</p>
+        <div id="options-container"></div>
+    </div>
+    <!-- ... rest of your buttons ... -->
+</div>
     <script src="js/cost.js"></script>
 </body>
 </html>
