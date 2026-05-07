@@ -131,3 +131,18 @@ h1 {
 .btn:disabled {
     cursor: default;
 }
+#quiz-status {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 20px;
+    padding: 10px;
+    background: #f8f9fa;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    color: var(--primary-color);
+    border-left: 4px solid var(--accent-color);
+}
+
+#live-score {
+    color: var(--success-color);
+}
