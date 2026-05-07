@@ -1,11 +1,10 @@
-// Array containing a sample of the 50 questions generated[cite: 1, 2]
 const quizData = [
     { q: "Which cell type is responsible for the formation of a dentinal bridge after pulp capping with MTA?", o: ["Primary Odontoblasts", "Replacement Odontoblast-like cells", "Fibroblasts", "Macrophages"], a: 1 },
     { q: "The 'danger zone' in mandibular molars, susceptible to strip perforation, is located:", o: ["Mesial surface of the mesial root", "Distal surface of the distal root", "Distal surface of the mesial root", "Furcation area of the distal root"], a: 2 },
     { q: "Which fiber type is primarily responsible for the 'throbbing' pain associated with irreversible pulpitis?", o: ["A-delta", "A-beta", "C-fibers", "Proprioceptors"], a: 2 },
     { q: "The most frequent cause of endodontic failure is:", o: ["Inadequate cleaning and shaping", "Poor coronal seal", "Systemic disease", "Overfilling"], a: 0 },
     { q: "According to Vertucci's classification, a 'Type II' canal configuration is:", o: ["1-1", "2-1", "1-2", "2-2"], a: 1 },
-    { q: "Which irrigant has the ability to dissolve both organic and inorganic tissue?", o: ["NaOCl", "EDTA", "Chlorhexidine", "None of the above"], a: 3 }, // Note: NaOCl dissolves organic only; EDTA inorganic only.[cite: 2]
+    { q: "Which irrigant has the ability to dissolve both organic and inorganic tissue?", o: ["NaOCl", "EDTA", "Chlorhexidine", "None of the above"], a: 3 },
     { q: "The 'Law of Symmetry' (Krasner & Rankow) does NOT apply to which teeth?", o: ["Maxillary molars", "Mandibular molars", "Mandibular premolars", "Maxillary premolars"], a: 0 },
     { q: "What is the primary reason for 'recapitulation' during canal preparation?", o: ["To increase canal size", "To remove accumulated debris in the apical portion", "To smoothen walls", "To measure working length"], a: 1 },
     { q: "Internal resorption is typically initiated by:", o: ["Bacteria in the PDL", "Chronic pulpal inflammation", "Trauma to the cementum", "Systemic calcium deficiency"], a: 1 },
@@ -50,31 +49,44 @@ const quizData = [
     { q: "Which of the following is a 'Zone of Fish' in periapical inflammation?", o: ["Zone of infection", "Zone of contamination", "Zone of irritation", "All of the above"], a: 3 },
     { q: "What is the 'Ludwig’s Angina'?", o: ["A localized abscess", "A cellulitis involving submandibular, sublingual, and submental spaces", "A heart condition", "A type of sinus infection"], a: 1 },
     { q: "Apexogenesis is indicated for:", o: ["Necrotic pulp in immature teeth", "Vital pulp in immature teeth", "Necrotic pulp in mature teeth", "Deciduous teeth only"], a: 1 }
-]
+];
 
+let currentIdx = 0;
+let score = 0;
+
+const questionText = document.getElementById('question-text');
+const optionsContainer = document.getElementById('options-container');
+const nextBtn = document.getElementById('next-btn');
 const currentQNum = document.getElementById('current-q-num');
 const liveScore = document.getElementById('live-score');
+const resultsDiv = document.getElementById('results');
 
 function loadQuestion() {
     resetState();
-    // Update status display
     currentQNum.innerText = currentIdx + 1;
     liveScore.innerText = score;
 
     let currentQ = quizData[currentIdx];
-    document.getElementById('question-text').innerText = `${currentIdx + 1}. ${currentQ.q}`;
+    questionText.innerText = currentQ.q;
     
     currentQ.o.forEach((option, index) => {
         const button = document.createElement('button');
         button.innerText = option;
         button.classList.add('btn');
         button.addEventListener('click', () => selectAnswer(index));
-        oContainer.appendChild(button);
+        optionsContainer.appendChild(button);
     });
 }
 
+function resetState() {
+    nextBtn.classList.add('hide');
+    while (optionsContainer.firstChild) {
+        optionsContainer.removeChild(optionsContainer.firstChild);
+    }
+}
+
 function selectAnswer(index) {
-    const buttons = oContainer.querySelectorAll('.btn');
+    const buttons = optionsContainer.querySelectorAll('.btn');
     const correct = quizData[currentIdx].a;
     
     buttons.forEach(btn => btn.style.pointerEvents = 'none');
@@ -82,12 +94,29 @@ function selectAnswer(index) {
     if (index === correct) {
         score++;
         buttons[index].classList.add('correct');
-        liveScore.innerText = score; // Update score immediately
+        liveScore.innerText = score;
     } else {
         buttons[index].classList.add('error');
         buttons[correct].classList.add('correct');
     }
-    
     nextBtn.classList.remove('hide');
 }
 
+nextBtn.addEventListener('click', () => {
+    currentIdx++;
+    if (currentIdx < quizData.length) {
+        loadQuestion();
+    } else {
+        showResults();
+    }
+});
+
+function showResults() {
+    document.getElementById('question-container').classList.add('hide');
+    document.getElementById('quiz-status').classList.add('hide');
+    resultsDiv.classList.remove('hide');
+    document.getElementById('final-score').innerText = `You scored ${score} out of ${quizData.length}`;
+}
+
+// Start the quiz
+loadQuestion();
