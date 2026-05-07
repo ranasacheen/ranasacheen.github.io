@@ -1,181 +1,25 @@
 <!DOCTYPE html>
-<html lang="en" class="no-js" >
+<html lang="en">
 <head>
-
-    <!--- basic page needs
-    ================================================== -->
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Sachin</title>
-
-    <script>
-        document.documentElement.classList.remove('no-js');
-        document.documentElement.classList.add('js');
-    </script>
-
-    <!-- CSS
-    ================================================== -->
-    <link rel="stylesheet" href="css/vendor.css">
-    <link rel="stylesheet" href="css/styles.css">
-
-    <!-- favicons
-    ================================================== -->
-    <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
-    <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png">
-    <link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png">
-    <link rel="manifest" href="site.webmanifest">
-
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ADAT Endodontics Quiz</title>
+    <link rel="stylesheet" href="style.css">
 </head>
-
-
-<body id="top">
-
-    
-    <!-- preloader
-    ================================================== -->
-    <div id="preloader">
-        <div id="loader" class="dots-fade">
-            <div></div>
-            <div></div>
-            <div></div>
+<body>
+    <div class="quiz-container">
+        <h1>ADAT Endodontics Practice</h1>
+        <div id="question-container">
+            <p id="question-text">Loading question...</p>
+            <div id="options-container"></div>
+        </div>
+        <button id="next-btn" class="hide">Next Question</button>
+        <div id="results" class="hide">
+            <h2>Quiz Complete!</h2>
+            <p id="score-text"></p>
+            <button onclick="location.reload()">Restart Quiz</button>
         </div>
     </div>
-
-
-    <!-- page wrap
-    ================================================== -->
-    <div id="page" class="s-pagewrap ss-home">
-
-
-
-            <!-- about
-            ----------------------------------------------- -->
-            <section id="about" class="s-about target-section">
-
-                <div class="row s-about__content width-sixteen-col">
-                    <div class="column grid-block grid-section-split">
-
-                        <img src="images/geometric_shape.svg" alt="" class="s-about__content-imgbg">
-
-                        <div class="section-header grid-section-split__header">
-                            <div class="text-pretitle">About</div>                           
-                            <h2 class="text-display-title">
-                                A web designer / front-end developer 
-                            </h2>                           
-                        </div> <!-- end section-header -->
-
-                        <div class="s-about__content-main grid-section-split__primary">
-                            <p class="attention-getter">
-                                A web designer / front-end developer interested in designing and developing interactive
-                                products with a comprehensive user-centered design process from user research to
-                                beautiful pixels, having 3.5 years of extensive working experience in web designing and
-                                front-end development.
-                            </p>
-                        </div> <!-- end s-about__content-main -->
-
-                    
-                    
-                    </div> <!-- content-inner -->
-                </div>
-                
-            </section> <!-- end s-about -->
-
-            <!-- expertise
-            ----------------------------------------------- -->
-           
-
-            <!-- clients
-            ----------------------------------------------- -->
-            <section id="clients" class="s-clients">          
-
-                <div class="row s-clients__content-block width-sixteen-col">
-                    <div class="column xl-12 grid-block grid-section-split">
-                    
-                        <div class="section-header grid-section-split__header">
-                            <div class="text-pretitle">Clients</div>                           
-                            <h2 class="text-display-title">
-                            I have had the privilege of working with these incredible brands.
-                            </h2>       
-                        </div> <!-- end section-header -->
-                    
-                        <div class="grid-section-split__primary">
-                            <div class="column xl-12">
-                    
-                                <div class="clients-list">                            
-                                    <div class="clients-list__item">
-                                        <a href="https://bhuclothing.com" target="_blank" style="color:#000">
-                                           BHU Clothing
-                                        </a>
-                                    </div>
-                                    <div class="clients-list__item">
-                                        <a href="https://gwm.com.np/" target="_blank" style="color:#000">
-                                           GWM Nepal
-                                        </a>
-                                    </div>
-                                    <div class="clients-list__item">
-                                        <a href="https://squareeighteen.com/" target="_blank" style="color:#000">
-                                            Square Eighteen
-                                        </a>
-                                    </div>
-                                    <div class="clients-list__item">
-                                        <a href="https://presidential.edu.np/" target="_blank" style="color:#000">
-                                            Business School
-                                        </a>
-                                    </div>
-                                    <div class="clients-list__item">
-                                        <a href="https://laxmihyundai.com/" target="_blank" style="color:#000">
-                                           Hyundai
-                                        </a>
-                                    </div>
-                                  
-                                </div> <!-- end clients-list -->
-        
-                            </div> <!-- end column -->
-                        </div> <!-- end grid-section-split__primary -->
-                    
-                    </div> <!-- end column -->
-                </div> <!-- end row -->
-
-              
-            
-
-            </section> <!-- end s-clients -->            
-
-        </section> <!-- s-content-->
-
-        <!-- # cta
-        ================================================== -->
-      
-
-        <!-- # journal
-        ================================================== -->
-       
-
-
-        <!-- # footer 
-        ================================================== -->
-        <footer class="s-footer">
-            
-            
-            <div class="row s-footer__bottom">
-               
-            
-
-                <div class="ss-go-top">
-                    <a class="smoothscroll" title="Back to Top" href="#top">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="36" height="36" fill="none" stroke="#ffffff" stroke-width="1" stroke-linecap="round" stroke-linejoin="round">&lt;!--!  Atomicons Free 1.00 by @atisalab License - https://atomicons.com/license/ (Icons: CC BY 4.0) Copyright 2021 Atomicons --&gt;<polyline points="17 11 12 6 7 11"></polyline><line x1="12" y1="18" x2="12" y2="6"></line></svg>
-                    </a>
-                </div> <!-- end ss-go-top -->
-            </div>
-            
-        </footer> <!-- end s-footer -->
-
-    </div> <!-- end page-wrap -->
-
-    <!-- Java Script
-    ================================================== -->
-    <script src="js/plugins.js"></script>
-    <script src="js/main.js"></script>
- <script src="js/cost.js"></script>
+    <script src="script.js"></script>
 </body>
 </html>
