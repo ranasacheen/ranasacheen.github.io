@@ -82,13 +82,21 @@ function resetState() {
 }
 
 function selectAnswer(index) {
+    const buttons = oContainer.querySelectorAll('.btn');
     const correct = quizData[currentIdx].a;
+    
+    // Disable all buttons so user can't change answer
+    buttons.forEach(btn => btn.style.pointerEvents = 'none');
+
     if (index === correct) {
         score++;
-        alert("Correct!");
+        buttons[index].classList.add('correct');
     } else {
-        alert("Wrong Answer!");
+        buttons[index].classList.add('error');
+        // Optional: Show the correct answer even if they missed it
+        buttons[correct].classList.add('correct');
     }
+    
     nextBtn.classList.remove('hide');
 }
 
