@@ -1,119 +1,330 @@
-// ==WdUserScript== (or ==UserScript==)
 // ==UserScript==
-// @name         Multi-Tab Inventory Excel Exporter
+// @name         Peculiar-Copy
 // @namespace    http://tampermonkey.net/
-// @version      2.0
-// @description  Fetches inbound, outbound, and transshipment data, filters by time window, and exports to a single Excel file with multiple tabs.
-// @match        https://www.company.com/*
-// @require      https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js
+// @version      2026-10-06
+// @description  try to take over the world!
+// @author       You
+// @match        https://peculiar-inventory-na.aka.corp.amazon.com/YHM1/report/*
 // @grant        none
 // ==/UserScript==
 
-(function() {
+(function () {
     'use strict';
 
-    // Create a floating UI Control Panel on any of the pages
-    function createUI() {
-        if (document.getElementById('inv-exporter-panel')) return;
+    // Key names for local storage
+    const STORAGE_KEY = 'container_report_stop_value';
+    const AUTO_KEY = 'container_report_auto_mode';
+    const DAYS_KEY = 'container_report_base_days';
 
-        const panel = document.createElement('div');
-        panel.id = 'inv-exporter-panel';
-        panel.innerHTML = `
-            <div style="position: fixed; top: 10px; right: 10px; z-index: 9999; background: #fff; padding: 15px; border: 2px solid #ccc; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); font-family: Arial, sans-serif;">
-                <h3 style="margin: 0 0 10px 0; font-size: 14px; color: #333;">Multi-Tab Inventory Exporter</h3>
-                <label style="font-size: 12px;">Days:</label><br>
-                <input type="number" id="inv-days" value="2" style="width: 60px; margin-bottom: 5px;"><br>
-                <label style="font-size: 12px;">Hours:</label><br>
-                <input type="number" id="inv-hours" value="23" style="width: 60px; margin-bottom: 5px;"><br>
-                <label style="font-size: 12px;">Minutes:</label><br>
-                <input type="number" id="inv-mins" value="3" style="width: 60px; margin-bottom: 10px;"><br>
-                <button id="inv-export-btn" style="background: #217346; color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; font-weight: bold;">Download Multi-Tab Excel</button>
-            </div>
-        `;
-        document.body.appendChild(panel);
-        document.getElementById('inv-export-btn').addEventListener('click', fetchAndExportAll);
+    // 1. Create a floating UI container
+    const panel = document.createElement('div');
+    panel.style.position = 'fixed';
+    panel.style.top = '70px';
+    panel.style.right = '25%';
+    panel.style.zIndex = '99999';
+    panel.style.backgroundColor = '#ffffff';
+    panel.style.border = '2px solid #007bff';
+    panel.style.borderRadius = '6px';
+    panel.style.padding = '10px';
+    panel.style.boxShadow = '0 4px 6px rgba(0,0,0,0.1)';
+    panel.style.display = 'flex';
+    panel.style.gap = '8px';
+    panel.style.alignItems = 'center';
+    panel.style.fontFamily = 'Arial, sans-serif';
+
+    // 2. Create Days Number Input (for choosing 2, 11, 12, etc. days)
+    const daysLabel = document.createElement('label');
+    daysLabel.style.display = 'flex';
+    daysLabel.style.alignItems = 'center';
+    daysLabel.style.gap = '3px';
+    daysLabel.style.fontSize = '12px';
+    daysLabel.style.fontWeight = 'bold';
+    daysLabel.style.color = '#333';
+
+    const daysInput = document.createElement('input');
+    daysInput.type = 'number';
+    daysInput.min = '0';
+    daysInput.style.width = '45px';
+    daysInput.style.padding = '4px';
+    daysInput.style.border = '1px solid #ccc';
+    daysInput.style.borderRadius = '4px';
+    daysInput.style.fontSize = '12px';
+
+    const savedDays = localStorage.getItem(DAYS_KEY);
+    daysInput.value = savedDays !== null ? savedDays : '2'; // Default to 2 days
+
+    daysLabel.appendChild(daysInput);
+    daysLabel.appendChild(document.createTextNode('d + Shift'));
+
+    // 3. Create Main Input Field (shows final calculated or manual value)
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.placeholder = 'Stop value';
+    input.style.width = '110px';
+    input.style.padding = '6px';
+    input.style.border = '1px solid #ccc';
+    input.style.borderRadius = '4px';
+    input.style.fontSize = '12px';
+
+    // 4. Create Auto Checkbox & Label
+    const autoContainer = document.createElement('label');
+    autoContainer.style.display = 'flex';
+    autoContainer.style.alignItems = 'center';
+    autoContainer.style.gap = '4px';
+    autoContainer.style.fontSize = '12px';
+    autoContainer.style.cursor = 'pointer';
+    autoContainer.style.fontWeight = 'bold';
+    autoContainer.style.color = '#333';
+
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    
+    const savedAutoMode = localStorage.getItem(AUTO_KEY);
+    checkbox.checked = savedAutoMode !== null ? savedAutoMode === 'true' : true;
+
+    autoContainer.appendChild(checkbox);
+    autoContainer.appendChild(document.createTextNode('Auto'));
+
+    // 5. Create Copy Button
+    const btn = document.createElement('button');
+    btn.innerText = 'Copy to Excel';
+    btn.style.padding = '6px 12px';
+    btn.style.backgroundColor = '#007bff';
+    btn.style.color = '#fff';
+    btn.style.border = 'none';
+    btn.style.borderRadius = '4px';
+    btn.style.cursor = 'pointer';
+    btn.style.fontWeight = 'bold';
+    btn.style.fontSize = '12px';
+
+    // Helper: Convert time string to total minutes
+    function parseToMinutes(text) {
+        const clean = text.toLowerCase().trim();
+        const dMatch = clean.match(/(\d+)\s*d/);
+        const hMatch = clean.match(/(\d+)\s*h/);
+        const mMatch = clean.match(/(\d+)\s*m/);
+
+        const days = dMatch ? parseInt(dMatch[1], 10) : 0;
+        const hours = hMatch ? parseInt(hMatch[1], 10) : 0;
+        const minutes = mMatch ? parseInt(mMatch[1], 10) : 0;
+
+        if (!dMatch && !hMatch && !mMatch) return null;
+        return (days * 1440) + (hours * 60) + minutes;
     }
 
-    // Calculate maximum age in milliseconds based on user input
-    function getTimeWindowMs() {
-        const days = parseInt(document.getElementById('inv-days').value) || 0;
-        const hours = parseInt(document.getElementById('inv-hours').value) || 0;
-        const mins = parseInt(document.getElementById('inv-mins').value) || 0;
-        return (days * 86400000) + (hours * 3600000) + (mins * 60000);
+    // Helper: Format minutes into duration string
+    function formatMinutesToDuration(totalMinutes) {
+        if (totalMinutes <= 0) return '0m';
+        const days = Math.floor(totalMinutes / 1440);
+        const hours = Math.floor((totalMinutes % 1440) / 60);
+        const minutes = totalMinutes % 60;
+
+        let parts = [];
+        if (days > 0) parts.push(`${days}d`);
+        if (hours > 0) parts.push(`${hours}h`);
+        if (minutes > 0 || parts.length === 0) parts.push(`${minutes}m`);
+        return parts.join(' ');
     }
 
-    // Parse HTML text into filtered array of rows
-    function parseHTMLTable(htmlText, maxAgeMs) {
-        const parser = new DOMParser();
-        const doc = parser.parseFromString(htmlText, 'text/html');
-        
-        // **NOTE: Update 'table tr' if your site uses a different structure**
-        const rows = doc.querySelectorAll('table tr');
-        if (rows.length === 0) return [];
+    // Helper: Parse span timestamp text into a Date object
+    function parseSpanTimestamp(text) {
+        let clean = text.replace(/p\.m\./gi, 'PM').replace(/a\.m\./gi, 'AM').replace(/,/g, '');
+        let parsedDate = new Date(clean);
+        return isNaN(parsedDate.getTime()) ? null : parsedDate;
+    }
 
-        const now = new Date().getTime();
-        let filteredData = [];
+    // Calculate Auto value: [Base Days] + [Hours until 6:30 PM]
+    function calculateAutoValue() {
+        const baseDays = parseInt(daysInput.value, 10) || 0;
+        localStorage.setItem(DAYS_KEY, baseDays);
 
-        rows.forEach((row, index) => {
-            const cols = row.querySelectorAll('th, td');
-            if (cols.length === 0) return;
+        const spans = document.querySelectorAll('span');
+        let timestampSpan = null;
 
-            let rowData = Array.from(cols).map(col => col.innerText.trim());
-
-            // Always keep the header row
-            if (index === 0) {
-                filteredData.push(rowData);
-                return;
+        for (let span of spans) {
+            const text = span.innerText.trim();
+            if (
+                /(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)/i.test(text) &&
+                /\d{1,2}:\d{2}/.test(text)
+            ) {
+                timestampSpan = span;
+                break;
             }
+        }
 
-            // **NOTE: Change index '0' to whichever column index holds your Timestamp**
-            const timeString = cols[0].innerText.trim();
-            const rowTime = new Date(timeString).getTime();
-
-            if (!isNaN(rowTime)) {
-                const ageMs = now - rowTime;
-                if (ageMs >= 0 && ageMs <= maxAgeMs) {
-                    filteredData.push(rowData);
+        let shiftRemainingMins = 0;
+        if (timestampSpan) {
+            const reportDate = parseSpanTimestamp(timestampSpan.innerText);
+            if (reportDate) {
+                const endOfShift = new Date(reportDate);
+                endOfShift.setHours(18, 30, 0, 0); // 6:30 PM
+                const diffMs = endOfShift - reportDate;
+                if (diffMs > 0) {
+                    shiftRemainingMins = Math.floor(diffMs / 60000);
                 }
             }
-        });
+        }
 
-        return filteredData;
+        const totalMins = (baseDays * 1440) + shiftRemainingMins;
+        const formattedDuration = formatMinutesToDuration(totalMins);
+
+        input.value = formattedDuration;
+        localStorage.setItem(STORAGE_KEY, formattedDuration);
     }
 
-    // Fetch all 3 links in the background, process, and build 1 Excel file with 3 tabs
-    async function fetchAndExportAll() {
-        const maxAgeMs = getTimeWindowMs();
-        const urls = {
-            'Inbound': 'https://www.company.com/inbound',
-            'Outbound': 'https://www.company.com/outbound',
-            'Transshipment': 'https://www.company.com/transshipment'
-        };
+    // Update input state based on Auto mode checkbox
+    function handleModeChange() {
+        if (checkbox.checked) {
+            input.readOnly = true;
+            input.style.backgroundColor = '#f1f3f5';
+            daysInput.disabled = false;
+            calculateAutoValue();
+        } else {
+            input.readOnly = false;
+            input.style.backgroundColor = '#ffffff';
+            daysInput.disabled = true;
+            const savedValue = localStorage.getItem(STORAGE_KEY);
+            if (savedValue) input.value = savedValue;
+        }
+        localStorage.setItem(AUTO_KEY, checkbox.checked);
+    }
 
-        const wb = XLSX.utils.book_new();
-        let successCount = 0;
+    // Listeners
+    checkbox.addEventListener('change', handleModeChange);
+    daysInput.addEventListener('input', () => {
+        if (checkbox.checked) calculateAutoValue();
+    });
 
-        for (const [sheetName, url] of Object.entries(urls)) {
-            try {
-                const response = await fetch(url, { credentials: 'include' });
-                const htmlText = await response.text();
-                const sheetData = parseHTMLTable(htmlText, maxAgeMs);
+    // Initial load setup
+    handleModeChange();
 
-                // Create a worksheet even if only headers exist, to keep tab structure intact
-                const ws = XLSX.utils.aoa_to_sheet(sheetData.length > 0 ? sheetData, [["No Data Within Timeframe"]]);
-                XLSX.utils.book_append_sheet(wb, ws, sheetName);
-                successCount++;
-            } catch (err) {
-                console.error(`Failed to fetch ${sheetName}:`, err);
+    // 6. Extraction Logic
+    btn.addEventListener('click', () => {
+        const table = document.getElementById('containers－record-report');
+        if (!table) {
+            alert('Table with ID "containers－record-report" not found!');
+            return;
+        }
+
+        const rows = Array.from(table.querySelectorAll('tbody tr'));
+        if (rows.length === 0) {
+            alert('No table body (tbody) rows found inside the table!');
+            return;
+        }
+
+        const rawInput = input.value.trim();
+        localStorage.setItem(STORAGE_KEY, rawInput);
+        const targetMinutes = parseToMinutes(rawInput);
+
+        let extractedData = [];
+        let stopIndex = rows.length - 1;
+        let exactMatchFound = false;
+
+        if (targetMinutes !== null) {
+            let smallestDifference = Infinity;
+            let bestMatchIndex = 0;
+
+            for (let i = 0; i < rows.length; i++) {
+                let cells = rows[i].querySelectorAll('td, th');
+                let rowMinutes = null;
+
+                for (let cell of cells) {
+                    let cellText = cell.innerText.trim();
+                    if (cellText.includes('m') || cellText.includes('h') || cellText.includes('d')) {
+                        let parsed = parseToMinutes(cellText);
+                        if (parsed !== null) {
+                            rowMinutes = parsed;
+                            break;
+                        }
+                    }
+                }
+
+                if (rowMinutes !== null) {
+                    let difference = Math.abs(rowMinutes - targetMinutes);
+                    if (difference === 0) {
+                        exactMatchFound = true;
+                        bestMatchIndex = i;
+                        smallestDifference = 0;
+                    } else if (!exactMatchFound && difference < smallestDifference) {
+                        smallestDifference = difference;
+                        bestMatchIndex = i;
+                    }
+                }
+            }
+
+            stopIndex = bestMatchIndex;
+            let bestRowCells = rows[bestMatchIndex].querySelectorAll('td, th');
+            let bestRowTimeStr = "";
+
+            for (let cell of bestRowCells) {
+                let txt = cell.innerText.trim();
+                if (txt.includes('m') || txt.includes('h') || txt.includes('d')) {
+                    bestRowTimeStr = txt.toLowerCase();
+                    break;
+                }
+            }
+
+            if (bestRowTimeStr !== "") {
+                for (let j = bestMatchIndex + 1; j < rows.length; j++) {
+                    let nextCells = rows[j].querySelectorAll('td, th');
+                    let match = false;
+                    for (let cell of nextCells) {
+                        if (cell.innerText.trim().toLowerCase() === bestRowTimeStr) {
+                            match = true;
+                            break;
+                        }
+                    }
+                    if (match) {
+                        stopIndex = j;
+                    } else {
+                        break;
+                    }
+                }
             }
         }
 
-        if (successCount > 0) {
-            XLSX.writeFile(wb, 'Complete_Inventory_Report.xlsx');
-        } else {
-            alert('Failed to fetch data from the endpoints. Check console for details.');
-        }
-    }
+        for (let i = 0; i <= stopIndex; i++) {
+            if (!rows[i]) continue;
+            let cells = rows[i].querySelectorAll('td, th');
+            let rowData = [];
 
-    window.addEventListener('load', createUI);
+            for (let c = 1; c < cells.length && rowData.length < 5; c++) {
+                let cell = cells[c];
+                let link = cell.querySelector('a');
+
+                if (link && link.href) {
+                    let cellText = cell.innerText.trim();
+                    rowData.push(cellText); // Plain text to keep Excel filters working smoothly
+                } else {
+                    rowData.push(cell.innerText.trim());
+                }
+            }
+
+            if (rowData.length > 0) {
+                extractedData.push(rowData.join('\t'));
+            }
+        }
+
+        if (extractedData.length === 0) {
+            alert('No data rows found to copy!');
+            return;
+        }
+
+        const finalOutput = extractedData.join('\n');
+
+        navigator.clipboard.writeText(finalOutput)
+            .then(() => {
+                alert(`Copied ${extractedData.length} row(s) up to target cutoff (${rawInput}).`);
+            })
+            .catch(err => {
+                console.error('Failed to copy: ', err);
+                alert('Clipboard error. Click inside the page first.');
+            });
+    });
+
+    panel.appendChild(daysLabel);
+    panel.appendChild(input);
+    panel.appendChild(autoContainer);
+    panel.appendChild(btn);
+    document.body.appendChild(panel);
 })();
