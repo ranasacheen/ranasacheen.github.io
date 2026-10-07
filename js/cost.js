@@ -14,13 +14,13 @@
     // Key names for local storage
     const STORAGE_KEY = 'container_report_stop_value';
     const AUTO_KEY = 'container_report_auto_mode';
-    const DAYS_KEY = 'container_report_base_days';
+    const SHIFT_KEY = 'container_report_shift_end';
 
     // 1. Create a floating UI container
     const panel = document.createElement('div');
     panel.style.position = 'fixed';
     panel.style.top = '70px';
-    panel.style.right = '25%';
+    panel.style.right = '20%';
     panel.style.zIndex = '99999';
     panel.style.backgroundColor = '#ffffff';
     panel.style.border = '2px solid #007bff';
@@ -32,31 +32,29 @@
     panel.style.alignItems = 'center';
     panel.style.fontFamily = 'Arial, sans-serif';
 
-    // 2. Create Days Number Input (for choosing 2, 11, 12, etc. days)
-    const daysLabel = document.createElement('label');
-    daysLabel.style.display = 'flex';
-    daysLabel.style.alignItems = 'center';
-    daysLabel.style.gap = '3px';
-    daysLabel.style.fontSize = '12px';
-    daysLabel.style.fontWeight = 'bold';
-    daysLabel.style.color = '#333';
+    // 2. Create Dynamic Shift End Time Picker
+    const shiftLabel = document.createElement('label');
+    shiftLabel.style.display = 'flex';
+    shiftLabel.style.alignItems = 'center';
+    shiftLabel.style.gap = '3px';
+    shiftLabel.style.fontSize = '12px';
+    shiftLabel.style.fontWeight = 'bold';
+    shiftLabel.style.color = '#333';
 
-    const daysInput = document.createElement('input');
-    daysInput.type = 'number';
-    daysInput.min = '0';
-    daysInput.style.width = '45px';
-    daysInput.style.padding = '4px';
-    daysInput.style.border = '1px solid #ccc';
-    daysInput.style.borderRadius = '4px';
-    daysInput.style.fontSize = '12px';
+    const shiftInput = document.createElement('input');
+    shiftInput.type = 'time';
+    shiftInput.style.padding = '4px';
+    shiftInput.style.border = '1px solid #ccc';
+    shiftInput.style.borderRadius = '4px';
+    shiftInput.style.fontSize = '12px';
 
-    const savedDays = localStorage.getItem(DAYS_KEY);
-    daysInput.value = savedDays !== null ? savedDays : '2'; // Default to 2 days
+    const savedShift = localStorage.getItem(SHIFT_KEY);
+    shiftInput.value = savedShift !== null ? savedShift : '18:30'; // Default 6:30 PM
 
-    daysLabel.appendChild(daysInput);
-    daysLabel.appendChild(document.createTextNode('d + Shift'));
+    shiftLabel.appendChild(document.createTextNode('Shift: '));
+    shiftLabel.appendChild(shiftInput);
 
-    // 3. Create Main Input Field (shows final calculated or manual value)
+    // 3. Create Main Input Field (Stop value)
     const input = document.createElement('input');
     input.type = 'text';
     input.placeholder = 'Stop value';
@@ -133,10 +131,9 @@
         return isNaN(parsedDate.getTime()) ? null : parsedDate;
     }
 
-    // Calculate Auto value: [Base Days] + [Hours until 6:30 PM]
+    // Calculate Auto value using 2 days default + dynamic shift end time
     function calculateAutoValue() {
-        const baseDays = parseInt(daysInput.value, 10) || 0;
-        localStorage.setItem(DAYS_KEY, baseDays);
+        localStorage.setItem(SHIFT_KEY, shiftInput.value);
 
         const spans = document.querySelectorAll('span');
         let timestampSpan = null;
@@ -157,7 +154,15 @@
             const reportDate = parseSpanTimestamp(timestampSpan.innerText);
             if (reportDate) {
                 const endOfShift = new Date(reportDate);
-                endOfShift.setHours(18, 30, 0, 0); // 6:30 PM
+                
+                const [shiftHours, shiftMins] = shiftInput.value.split(':').map(Number);
+                endOfShift.setHours(
+                    !isNaN(shiftHours) ? shiftHours : 18, 
+                    !isNaN(shiftMins) ? shiftMins : 30, 
+                    0, 
+                    0
+                );
+
                 const diffMs = endOfShift - reportDate;
                 if (diffMs > 0) {
                     shiftRemainingMins = Math.floor(diffMs / 60000);
@@ -165,7 +170,9 @@
             }
         }
 
-        const totalMins = (baseDays * 1440) + shiftRemainingMins;
+        // Hardcoded default base days = 2 (2 days * 1440 minutes = 2880 mins)
+        const baseDaysMinutes = 2 * 1440;
+        const totalMins = baseDaysMinutes + shiftRemainingMins;
         const formattedDuration = formatMinutesToDuration(totalMins);
 
         input.value = formattedDuration;
@@ -177,12 +184,12 @@
         if (checkbox.checked) {
             input.readOnly = true;
             input.style.backgroundColor = '#f1f3f5';
-            daysInput.disabled = false;
+            shiftInput.disabled = false;
             calculateAutoValue();
         } else {
             input.readOnly = false;
             input.style.backgroundColor = '#ffffff';
-            daysInput.disabled = true;
+            shiftInput.disabled = true;
             const savedValue = localStorage.getItem(STORAGE_KEY);
             if (savedValue) input.value = savedValue;
         }
@@ -191,12 +198,25 @@
 
     // Listeners
     checkbox.addEventListener('change', handleModeChange);
-    daysInput.addEventListener('input', () => {
+    shiftInput.addEventListener('input', () => {
         if (checkbox.checked) calculateAutoValue();
     });
 
     // Initial load setup
     handleModeChange();
+
+    // Observe DOM mutations so values update automatically if the <span> loads later
+    const observer = new MutationObserver(() => {
+        if (checkbox.checked) {
+            calculateAutoValue();
+        }
+    });
+
+    observer.observe(document.body, {
+        childList: true,
+        subtree: true,
+        characterData: true
+    });
 
     // 6. Extraction Logic
     btn.addEventListener('click', () => {
@@ -294,7 +314,7 @@
 
                 if (link && link.href) {
                     let cellText = cell.innerText.trim();
-                    rowData.push(cellText); // Plain text to keep Excel filters working smoothly
+                    rowData.push(cellText);
                 } else {
                     rowData.push(cell.innerText.trim());
                 }
@@ -322,7 +342,7 @@
             });
     });
 
-    panel.appendChild(daysLabel);
+    panel.appendChild(shiftLabel);
     panel.appendChild(input);
     panel.appendChild(autoContainer);
     panel.appendChild(btn);
