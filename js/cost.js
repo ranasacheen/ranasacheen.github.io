@@ -1,10 +1,12 @@
 // ==UserScript==
 // @name         Amazon Tote Price Calculator (Flexible IDs)
-// @namespace    http://tampermonkey.net/
-// @version      1.2
+// @namespace    [http://tampermonkey.net/](http://tampermonkey.net/)
+// @version      1.3
 // @description  Calculates total price from inventory section table with flexible product ID extraction
-// @match        https://fcresearch-na.aka.amazon.com/*
-// @match        https://www.amazon.ca/*
+// @match        [https://fcresearch-na.aka.amazon.com/](https://fcresearch-na.aka.amazon.com/)*
+// @match        [https://www.amazon.ca/](https://www.amazon.ca/)*
+// @connect      fcresearch-na.aka.amazon.com
+// @connect      amazon.ca
 // @grant        GM_xmlhttpRequest
 // @grant        GM_addStyle
 // ==/UserScript==
@@ -86,14 +88,14 @@
 
         resultsDiv.innerHTML = 'Fetching container details...';
 
-        const containerUrl = https://fcresearch-na.aka.amazon.com/yhm1/results/${containerId};
+        const containerUrl = `[https://fcresearch-na.aka.amazon.com/yhm1/results/$](https://fcresearch-na.aka.amazon.com/yhm1/results/$){containerId}`;
 
         GM_xmlhttpRequest({
             method: 'GET',
             url: containerUrl,
             onload: async function(response) {
                 if (response.status !== 200) {
-                    resultsDiv.innerHTML = Error: Failed to load container page (Status ${response.status});
+                    resultsDiv.innerHTML = `Error: Failed to load container page (Status ${response.status})`;
                     return;
                 }
 
@@ -125,15 +127,11 @@
                 const rows = targetTable.querySelectorAll('tr');
                 const productIds = new Set();
 
-                rows.forEach((row, index) => {
-                    // Skip table header rows if they use <th>
+                rows.forEach((row) => {
                     const cells = row.querySelectorAll('td');
                     if (cells.length > 0) {
-                        // Usually, the product code/identifier is in the first few cells of a data row
-                        // Let's grab text from the first cell or look for valid alphanumeric ID tokens
                         const firstCellText = cells[0].textContent.trim();
                         
-                        // Clean up text to make sure it looks like a product ID (alphanumeric, no spaces, length >= 5)
                         if (firstCellText && !firstCellText.toLowerCase().includes('action') && firstCellText.length >= 4) {
                             productIds.add(firstCellText);
                         }
@@ -146,7 +144,7 @@
                     return;
                 }
 
-                resultsDiv.innerHTML = Found ${uniqueProducts.length} items. Fetching prices...;
+                resultsDiv.innerHTML = `Found ${uniqueProducts.length} items. Fetching prices...`;
 
                 let totalPrice = 0;
                 let processedCount = 0;
@@ -156,13 +154,13 @@
                         const price = await getProductPrice(prodId);
                         totalPrice += price;
                         processedCount++;
-                        resultsDiv.innerHTML = Processed ${processedCount}/${uniqueProducts.length}<br>Total so far: $${totalPrice.toFixed(2)};
+                        resultsDiv.innerHTML = `Processed ${processedCount}/${uniqueProducts.length}<br>Total so far: $${totalPrice.toFixed(2)}`;
                     } catch (err) {
-                        console.error(Error fetching price for ${prodId}:, err);
+                        console.error(`Error fetching price for ${prodId}:`, err);
                     }
                 }
 
-                resultsDiv.innerHTML += <br><strong>Final Total: $${totalPrice.toFixed(2)}</strong>;
+                resultsDiv.innerHTML += `<br><strong>Final Total: $${totalPrice.toFixed(2)}</strong>`;
             },
             onerror: function() {
                 resultsDiv.innerHTML = 'Error: Network request failed.';
@@ -171,13 +169,11 @@
     });
 
     async function getProductPrice(prodId) {
-        // Step 1: Try internal fcresearch product page
-        const internalUrl = https://fcresearch-na.aka.amazon.com/yhm1/results/product?s=${prodId};
+        const internalUrl = `[https://fcresearch-na.aka.amazon.com/yhm1/results/product?s=$](https://fcresearch-na.aka.amazon.com/yhm1/results/product?s=$){prodId}`;
         let price = await fetchAndExtractInternalPrice(internalUrl);
         
-        // Step 2: Fallback to amazon.ca if price is 0 or invalid
         if (!price || price === 0) {
-            const externalUrl = https://www.amazon.ca/gp/product/${prodId};
+            const externalUrl = `[https://www.amazon.ca/gp/product/$](https://www.amazon.ca/gp/product/$){prodId}`;
             price = await fetchAndExtractAmazonCaPrice(externalUrl);
         }
 
