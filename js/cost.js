@@ -1,350 +1,244 @@
 // ==UserScript==
-// @name         Peculiar-Copy
+// @name         Amazon Tote Price Calculator (Flexible IDs)
 // @namespace    http://tampermonkey.net/
-// @version      2026-10-06
-// @description  try to take over the world!
-// @author       You
-// @match        https://peculiar-inventory-na.aka.corp.amazon.com/YHM1/report/*
-// @grant        none
+// @version      1.2
+// @description  Calculates total price from inventory section table with flexible product ID extraction
+// @match        https://fcresearch-na.aka.amazon.com/*
+// @match        https://www.amazon.ca/*
+// @grant        GM_xmlhttpRequest
+// @grant        GM_addStyle
 // ==/UserScript==
 
-(function () {
+(function() {
     'use strict';
 
-    // Key names for local storage
-    const STORAGE_KEY = 'container_report_stop_value';
-    const AUTO_KEY = 'container_report_auto_mode';
-    const SHIFT_KEY = 'container_report_shift_end';
-
-    // 1. Create a floating UI container
-    const panel = document.createElement('div');
-    panel.style.position = 'fixed';
-    panel.style.top = '70px';
-    panel.style.right = '20%';
-    panel.style.zIndex = '99999';
-    panel.style.backgroundColor = '#ffffff';
-    panel.style.border = '2px solid #007bff';
-    panel.style.borderRadius = '6px';
-    panel.style.padding = '10px';
-    panel.style.boxShadow = '0 4px 6px rgba(0,0,0,0.1)';
-    panel.style.display = 'flex';
-    panel.style.gap = '8px';
-    panel.style.alignItems = 'center';
-    panel.style.fontFamily = 'Arial, sans-serif';
-
-    // 2. Create Dynamic Shift End Time Picker
-    const shiftLabel = document.createElement('label');
-    shiftLabel.style.display = 'flex';
-    shiftLabel.style.alignItems = 'center';
-    shiftLabel.style.gap = '3px';
-    shiftLabel.style.fontSize = '12px';
-    shiftLabel.style.fontWeight = 'bold';
-    shiftLabel.style.color = '#333';
-
-    const shiftInput = document.createElement('input');
-    shiftInput.type = 'time';
-    shiftInput.style.padding = '4px';
-    shiftInput.style.border = '1px solid #ccc';
-    shiftInput.style.borderRadius = '4px';
-    shiftInput.style.fontSize = '12px';
-
-    const savedShift = localStorage.getItem(SHIFT_KEY);
-    shiftInput.value = savedShift !== null ? savedShift : '18:30'; // Default 6:30 PM
-
-    shiftLabel.appendChild(document.createTextNode('Shift: '));
-    shiftLabel.appendChild(shiftInput);
-
-    // 3. Create Main Input Field (Stop value)
-    const input = document.createElement('input');
-    input.type = 'text';
-    input.placeholder = 'Stop value';
-    input.style.width = '110px';
-    input.style.padding = '6px';
-    input.style.border = '1px solid #ccc';
-    input.style.borderRadius = '4px';
-    input.style.fontSize = '12px';
-
-    // 4. Create Auto Checkbox & Label
-    const autoContainer = document.createElement('label');
-    autoContainer.style.display = 'flex';
-    autoContainer.style.alignItems = 'center';
-    autoContainer.style.gap = '4px';
-    autoContainer.style.fontSize = '12px';
-    autoContainer.style.cursor = 'pointer';
-    autoContainer.style.fontWeight = 'bold';
-    autoContainer.style.color = '#333';
-
-    const checkbox = document.createElement('input');
-    checkbox.type = 'checkbox';
-    
-    const savedAutoMode = localStorage.getItem(AUTO_KEY);
-    checkbox.checked = savedAutoMode !== null ? savedAutoMode === 'true' : true;
-
-    autoContainer.appendChild(checkbox);
-    autoContainer.appendChild(document.createTextNode('Auto'));
-
-    // 5. Create Copy Button
-    const btn = document.createElement('button');
-    btn.innerText = 'Copy to Excel';
-    btn.style.padding = '6px 12px';
-    btn.style.backgroundColor = '#007bff';
-    btn.style.color = '#fff';
-    btn.style.border = 'none';
-    btn.style.borderRadius = '4px';
-    btn.style.cursor = 'pointer';
-    btn.style.fontWeight = 'bold';
-    btn.style.fontSize = '12px';
-
-    // Helper: Convert time string to total minutes
-    function parseToMinutes(text) {
-        const clean = text.toLowerCase().trim();
-        const dMatch = clean.match(/(\d+)\s*d/);
-        const hMatch = clean.match(/(\d+)\s*h/);
-        const mMatch = clean.match(/(\d+)\s*m/);
-
-        const days = dMatch ? parseInt(dMatch[1], 10) : 0;
-        const hours = hMatch ? parseInt(hMatch[1], 10) : 0;
-        const minutes = mMatch ? parseInt(mMatch[1], 10) : 0;
-
-        if (!dMatch && !hMatch && !mMatch) return null;
-        return (days * 1440) + (hours * 60) + minutes;
-    }
-
-    // Helper: Format minutes into duration string
-    function formatMinutesToDuration(totalMinutes) {
-        if (totalMinutes <= 0) return '0m';
-        const days = Math.floor(totalMinutes / 1440);
-        const hours = Math.floor((totalMinutes % 1440) / 60);
-        const minutes = totalMinutes % 60;
-
-        let parts = [];
-        if (days > 0) parts.push(`${days}d`);
-        if (hours > 0) parts.push(`${hours}h`);
-        if (minutes > 0 || parts.length === 0) parts.push(`${minutes}m`);
-        return parts.join(' ');
-    }
-
-    // Helper: Parse span timestamp text into a Date object
-    function parseSpanTimestamp(text) {
-        let clean = text.replace(/p\.m\./gi, 'PM').replace(/a\.m\./gi, 'AM').replace(/,/g, '');
-        let parsedDate = new Date(clean);
-        return isNaN(parsedDate.getTime()) ? null : parsedDate;
-    }
-
-    // Calculate Auto value using 2 days default + dynamic shift end time
-    function calculateAutoValue() {
-        localStorage.setItem(SHIFT_KEY, shiftInput.value);
-
-        const spans = document.querySelectorAll('span');
-        let timestampSpan = null;
-
-        for (let span of spans) {
-            const text = span.innerText.trim();
-            if (
-                /(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)/i.test(text) &&
-                /\d{1,2}:\d{2}/.test(text)
-            ) {
-                timestampSpan = span;
-                break;
-            }
+    // Inject UI Styling
+    GM_addStyle(`
+        #tote-price-calc-ui {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 10000;
+            background: #232f3e;
+            color: #fff;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            font-family: Arial, sans-serif;
+            width: 320px;
         }
-
-        let shiftRemainingMins = 0;
-        if (timestampSpan) {
-            const reportDate = parseSpanTimestamp(timestampSpan.innerText);
-            if (reportDate) {
-                const endOfShift = new Date(reportDate);
-                
-                const [shiftHours, shiftMins] = shiftInput.value.split(':').map(Number);
-                endOfShift.setHours(
-                    !isNaN(shiftHours) ? shiftHours : 18, 
-                    !isNaN(shiftMins) ? shiftMins : 30, 
-                    0, 
-                    0
-                );
-
-                const diffMs = endOfShift - reportDate;
-                if (diffMs > 0) {
-                    shiftRemainingMins = Math.floor(diffMs / 60000);
-                }
-            }
+        #tote-price-calc-ui h3 {
+            margin: 0 0 10px 0;
+            font-size: 14px;
+            color: #ff9900;
         }
-
-        // Hardcoded default base days = 2 (2 days * 1440 minutes = 2880 mins)
-        const baseDaysMinutes = 2 * 1440;
-        const totalMins = baseDaysMinutes + shiftRemainingMins;
-        const formattedDuration = formatMinutesToDuration(totalMins);
-
-        input.value = formattedDuration;
-        localStorage.setItem(STORAGE_KEY, formattedDuration);
-    }
-
-    // Update input state based on Auto mode checkbox
-    function handleModeChange() {
-        if (checkbox.checked) {
-            input.readOnly = true;
-            input.style.backgroundColor = '#f1f3f5';
-            shiftInput.disabled = false;
-            calculateAutoValue();
-        } else {
-            input.readOnly = false;
-            input.style.backgroundColor = '#ffffff';
-            shiftInput.disabled = true;
-            const savedValue = localStorage.getItem(STORAGE_KEY);
-            if (savedValue) input.value = savedValue;
+        #tote-price-calc-ui input {
+            width: 100%;
+            padding: 8px;
+            margin-bottom: 8px;
+            box-sizing: border-box;
+            border: 1px solid #ccc;
+            border-radius: 4px;
         }
-        localStorage.setItem(AUTO_KEY, checkbox.checked);
-    }
-
-    // Listeners
-    checkbox.addEventListener('change', handleModeChange);
-    shiftInput.addEventListener('input', () => {
-        if (checkbox.checked) calculateAutoValue();
-    });
-
-    // Initial load setup
-    handleModeChange();
-
-    // Observe DOM mutations so values update automatically if the <span> loads later
-    const observer = new MutationObserver(() => {
-        if (checkbox.checked) {
-            calculateAutoValue();
+        #tote-price-calc-ui button {
+            width: 100%;
+            padding: 8px;
+            background: #ff9900;
+            border: none;
+            color: #111;
+            font-weight: bold;
+            border-radius: 4px;
+            cursor: pointer;
         }
-    });
+        #tote-price-calc-ui button:hover {
+            background: #fa8900;
+        }
+        #tote-calc-results {
+            margin-top: 10px;
+            font-size: 12px;
+            max-height: 180px;
+            overflow-y: auto;
+            background: #131a22;
+            padding: 8px;
+            border-radius: 4px;
+        }
+    `);
 
-    observer.observe(document.body, {
-        childList: true,
-        subtree: true,
-        characterData: true
-    });
+    // Create UI Panel
+    const uiContainer = document.createElement('div');
+    uiContainer.id = 'tote-price-calc-ui';
+    uiContainer.innerHTML = `
+        <h3>Tote Price Calculator</h3>
+        <input type="text" id="tote-input" placeholder="Enter Container ID (e.g. tsx0076888)" />
+        <button id="calc-btn">Calculate Total Price</button>
+        <div id="tote-calc-results">Status: Ready</div>
+    `;
+    document.body.appendChild(uiContainer);
 
-    // 6. Extraction Logic
-    btn.addEventListener('click', () => {
-        const table = document.getElementById('containers－record-report');
-        if (!table) {
-            alert('Table with ID "containers－record-report" not found!');
+    document.getElementById('calc-btn').addEventListener('click', async () => {
+        const containerId = document.getElementById('tote-input').value.trim();
+        const resultsDiv = document.getElementById('tote-calc-results');
+
+        if (!containerId) {
+            resultsDiv.innerHTML = 'Error: Please enter a container ID.';
             return;
         }
 
-        const rows = Array.from(table.querySelectorAll('tbody tr'));
-        if (rows.length === 0) {
-            alert('No table body (tbody) rows found inside the table!');
-            return;
-        }
+        resultsDiv.innerHTML = 'Fetching container details...';
 
-        const rawInput = input.value.trim();
-        localStorage.setItem(STORAGE_KEY, rawInput);
-        const targetMinutes = parseToMinutes(rawInput);
+        const containerUrl = https://fcresearch-na.aka.amazon.com/yhm1/results/${containerId};
 
-        let extractedData = [];
-        let stopIndex = rows.length - 1;
-        let exactMatchFound = false;
-
-        if (targetMinutes !== null) {
-            let smallestDifference = Infinity;
-            let bestMatchIndex = 0;
-
-            for (let i = 0; i < rows.length; i++) {
-                let cells = rows[i].querySelectorAll('td, th');
-                let rowMinutes = null;
-
-                for (let cell of cells) {
-                    let cellText = cell.innerText.trim();
-                    if (cellText.includes('m') || cellText.includes('h') || cellText.includes('d')) {
-                        let parsed = parseToMinutes(cellText);
-                        if (parsed !== null) {
-                            rowMinutes = parsed;
-                            break;
-                        }
-                    }
+        GM_xmlhttpRequest({
+            method: 'GET',
+            url: containerUrl,
+            onload: async function(response) {
+                if (response.status !== 200) {
+                    resultsDiv.innerHTML = Error: Failed to load container page (Status ${response.status});
+                    return;
                 }
 
-                if (rowMinutes !== null) {
-                    let difference = Math.abs(rowMinutes - targetMinutes);
-                    if (difference === 0) {
-                        exactMatchFound = true;
-                        bestMatchIndex = i;
-                        smallestDifference = 0;
-                    } else if (!exactMatchFound && difference < smallestDifference) {
-                        smallestDifference = difference;
-                        bestMatchIndex = i;
-                    }
-                }
-            }
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(response.responseText, 'text/html');
 
-            stopIndex = bestMatchIndex;
-            let bestRowCells = rows[bestMatchIndex].querySelectorAll('td, th');
-            let bestRowTimeStr = "";
+                // Find the inventory table
+                const tables = doc.querySelectorAll('table');
+                let targetTable = null;
 
-            for (let cell of bestRowCells) {
-                let txt = cell.innerText.trim();
-                if (txt.includes('m') || txt.includes('h') || txt.includes('d')) {
-                    bestRowTimeStr = txt.toLowerCase();
-                    break;
-                }
-            }
-
-            if (bestRowTimeStr !== "") {
-                for (let j = bestMatchIndex + 1; j < rows.length; j++) {
-                    let nextCells = rows[j].querySelectorAll('td, th');
-                    let match = false;
-                    for (let cell of nextCells) {
-                        if (cell.innerText.trim().toLowerCase() === bestRowTimeStr) {
-                            match = true;
-                            break;
-                        }
-                    }
-                    if (match) {
-                        stopIndex = j;
-                    } else {
+                for (let t of tables) {
+                    const textContent = t.textContent.toLowerCase();
+                    if (textContent.includes('inventory') || t.id.toLowerCase().includes('inventory') || t.className.toLowerCase().includes('inventory')) {
+                        targetTable = t;
                         break;
                     }
                 }
-            }
-        }
 
-        for (let i = 0; i <= stopIndex; i++) {
-            if (!rows[i]) continue;
-            let cells = rows[i].querySelectorAll('td, th');
-            let rowData = [];
-
-            for (let c = 1; c < cells.length && rowData.length < 5; c++) {
-                let cell = cells[c];
-                let link = cell.querySelector('a');
-
-                if (link && link.href) {
-                    let cellText = cell.innerText.trim();
-                    rowData.push(cellText);
-                } else {
-                    rowData.push(cell.innerText.trim());
+                if (!targetTable && tables.length > 0) {
+                    targetTable = tables[0];
                 }
+
+                if (!targetTable) {
+                    resultsDiv.innerHTML = 'Error: Could not find inventory table on container page.';
+                    return;
+                }
+
+                // Extract product identifiers flexibly from the table rows
+                const rows = targetTable.querySelectorAll('tr');
+                const productIds = new Set();
+
+                rows.forEach((row, index) => {
+                    // Skip table header rows if they use <th>
+                    const cells = row.querySelectorAll('td');
+                    if (cells.length > 0) {
+                        // Usually, the product code/identifier is in the first few cells of a data row
+                        // Let's grab text from the first cell or look for valid alphanumeric ID tokens
+                        const firstCellText = cells[0].textContent.trim();
+                        
+                        // Clean up text to make sure it looks like a product ID (alphanumeric, no spaces, length >= 5)
+                        if (firstCellText && !firstCellText.toLowerCase().includes('action') && firstCellText.length >= 4) {
+                            productIds.add(firstCellText);
+                        }
+                    }
+                });
+
+                const uniqueProducts = Array.from(productIds);
+                if (uniqueProducts.length === 0) {
+                    resultsDiv.innerHTML = 'No product IDs found in the inventory table rows.';
+                    return;
+                }
+
+                resultsDiv.innerHTML = Found ${uniqueProducts.length} items. Fetching prices...;
+
+                let totalPrice = 0;
+                let processedCount = 0;
+
+                for (const prodId of uniqueProducts) {
+                    try {
+                        const price = await getProductPrice(prodId);
+                        totalPrice += price;
+                        processedCount++;
+                        resultsDiv.innerHTML = Processed ${processedCount}/${uniqueProducts.length}<br>Total so far: $${totalPrice.toFixed(2)};
+                    } catch (err) {
+                        console.error(Error fetching price for ${prodId}:, err);
+                    }
+                }
+
+                resultsDiv.innerHTML += <br><strong>Final Total: $${totalPrice.toFixed(2)}</strong>;
+            },
+            onerror: function() {
+                resultsDiv.innerHTML = 'Error: Network request failed.';
             }
-
-            if (rowData.length > 0) {
-                extractedData.push(rowData.join('\t'));
-            }
-        }
-
-        if (extractedData.length === 0) {
-            alert('No data rows found to copy!');
-            return;
-        }
-
-        const finalOutput = extractedData.join('\n');
-
-        navigator.clipboard.writeText(finalOutput)
-            .then(() => {
-                alert(`Copied ${extractedData.length} row(s) up to target cutoff (${rawInput}).`);
-            })
-            .catch(err => {
-                console.error('Failed to copy: ', err);
-                alert('Clipboard error. Click inside the page first.');
-            });
+        });
     });
 
-    panel.appendChild(shiftLabel);
-    panel.appendChild(input);
-    panel.appendChild(autoContainer);
-    panel.appendChild(btn);
-    document.body.appendChild(panel);
+    async function getProductPrice(prodId) {
+        // Step 1: Try internal fcresearch product page
+        const internalUrl = https://fcresearch-na.aka.amazon.com/yhm1/results/product?s=${prodId};
+        let price = await fetchAndExtractInternalPrice(internalUrl);
+        
+        // Step 2: Fallback to amazon.ca if price is 0 or invalid
+        if (!price || price === 0) {
+            const externalUrl = https://www.amazon.ca/gp/product/${prodId};
+            price = await fetchAndExtractAmazonCaPrice(externalUrl);
+        }
+
+        return price || 0;
+    }
+
+    function fetchAndExtractInternalPrice(url) {
+        return new Promise((resolve) => {
+            GM_xmlhttpRequest({
+                method: 'GET',
+                url: url,
+                onload: function(response) {
+                    if (response.status !== 200) {
+                        resolve(0);
+                        return;
+                    }
+                    const parser = new DOMParser();
+                    const doc = parser.parseFromString(response.responseText, 'text/html');
+                    
+                    const bodyText = doc.body.textContent;
+                    const priceMatch = bodyText.match(/(?:List Price|Price)[:\s]*CAD\s*([0-9]+\.[0-9]{2})/i) || 
+                                       bodyText.match(/CAD\s*([0-9]+\.[0-9]{2})/i);
+
+                    if (priceMatch && priceMatch[1]) {
+                        resolve(parseFloat(priceMatch[1]));
+                    } else {
+                        resolve(0);
+                    }
+                },
+                onerror: function() {
+                    resolve(0);
+                }
+            });
+        });
+    }
+
+    function fetchAndExtractAmazonCaPrice(url) {
+        return new Promise((resolve) => {
+            GM_xmlhttpRequest({
+                method: 'GET',
+                url: url,
+                onload: function(response) {
+                    if (response.status !== 200) {
+                        resolve(0);
+                        return;
+                    }
+                    const parser = new DOMParser();
+                    const doc = parser.parseFromString(response.responseText, 'text/html');
+                    
+                    const priceSpan = doc.querySelector('.a-price .a-offscreen, #priceblock_ourprice, #priceblock_dealprice');
+                    if (priceSpan) {
+                        const val = parseFloat(priceSpan.textContent.replace(/[^0-9.]/g, ''));
+                        resolve(isNaN(val) ? 0 : val);
+                    } else {
+                        resolve(0);
+                    }
+                },
+                onerror: function() {
+                    resolve(0);
+                }
+            });
+        });
+    }
 })();
