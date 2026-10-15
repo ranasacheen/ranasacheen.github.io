@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         Amazon Multi-Tote Price Calculator (with Quantity Support)
+// @name         Amazon Multi-Tote Price & Quantity Calculator
 // @namespace    http://tampermonkey.net/
-// @version      2.2
-// @description  Calculates total prices for multiple totes, multiplying item price by its quantity
+// @version      2.3
+// @description  Calculates total cost and total quantity per tote with side-by-side summary & Excel export
 // @match        https://fcresearch-na.aka.amazon.com/*
 // @match        https://www.amazon.ca/*
 // @connect      fcresearch-na.aka.amazon.com
@@ -27,7 +27,7 @@
             border-radius: 8px;
             box-shadow: 0 4px 12px rgba(0,0,0,0.3);
             font-family: Arial, sans-serif;
-            width: 340px;
+            width: 350px;
         }
         #tote-price-calc-ui h3 {
             margin: 0 0 10px 0;
@@ -70,12 +70,12 @@
         #tote-calc-results {
             margin-top: 10px;
             font-size: 12px;
-            max-height: 200px;
+            max-height: 220px;
             overflow-y: auto;
             background: #131a22;
             padding: 8px;
             border-radius: 4px;
-            line-height: 1.4;
+            line-height: 1.5;
         }
     `);
 
@@ -85,7 +85,7 @@
     const uiContainer = document.createElement('div');
     uiContainer.id = 'tote-price-calc-ui';
     uiContainer.innerHTML = `
-        <h3>Multi-Tote Price Calculator</h3>
+        <h3>Multi-Tote Price & Quantity Calculator</h3>
         <textarea id="tote-input" placeholder="Enter Container IDs (one per line)&#10;tsx0076888&#10;tsx0076889"></textarea>
         <button id="calc-btn">Calculate All Totes</button>
         <div id="tote-calc-results">Status: Ready</div>
@@ -117,7 +117,8 @@
 
         resultsDiv.innerHTML = `Starting batch process for ${containerIds.length} tote(s)...`;
 
-        let grandTotal = 0;
+        let grandTotalCost = 0;
+        let grandTotalUnits = 0;
         let summaryHTML = '';
         let completedTotes = 0;
 
@@ -126,14 +127,16 @@
 
             try {
                 const toteResult = await processSingleTote(containerId);
-                grandTotal += toteResult.total;
-                summaryHTML += `<div>• <b>${containerId}</b>: ${toteResult.totalUnits} units (${toteResult.uniqueCount} SKUs) | $${toteResult.total.toFixed(2)}</div>`;
+                grandTotalCost += toteResult.totalCost;
+                grandTotalUnits += toteResult.totalUnits;
+
+                summaryHTML += `<div>• <b>${containerId}</b>: <span style="color:#ff9900;">${toteResult.totalUnits} Units</span> | <b>$${toteResult.totalCost.toFixed(2)}</b></div>`;
                 
                 lastBatchData.push({
                     toteId: containerId,
                     totalUnits: toteResult.totalUnits,
                     uniqueSkus: toteResult.uniqueCount,
-                    total: toteResult.total.toFixed(2)
+                    totalCost: toteResult.totalCost.toFixed(2)
                 });
             } catch (err) {
                 summaryHTML += `<div>• <span style="color: #ff6b6b;"><b>${containerId}</b>: Failed</span></div>`;
@@ -141,18 +144,19 @@
                     toteId: containerId,
                     totalUnits: 0,
                     uniqueSkus: 0,
-                    total: "0.00"
+                    totalCost: "0.00"
                 });
             }
 
             completedTotes++;
         }
 
+        // Final output summary displaying overall units alongside total cost
         resultsDiv.innerHTML = `
             <b>Batch Complete!</b><br><br>
             ${summaryHTML}
             <hr style="border: 0; border-top: 1px solid #444; margin: 8px 0;">
-            <strong>Grand Total: $${grandTotal.toFixed(2)}</strong>
+            <strong>Grand Total: <span style="color:#ff9900;">${grandTotalUnits} Units</span> | $${grandTotalCost.toFixed(2)}</strong>
         `;
 
         if (lastBatchData.length > 0) {
@@ -160,9 +164,9 @@
             copyBtn.className = 'secondary-btn';
             copyBtn.innerText = '📋 Copy Data for Excel';
             copyBtn.onclick = () => {
-                let tsvContent = "Tote ID\tTotal Units\tUnique SKUs\tTotal Price\n";
+                let tsvContent = "Tote ID\tTotal Units\tUnique SKUs\tTotal Cost\n";
                 lastBatchData.forEach(row => {
-                    tsvContent += `${row.toteId}\t${row.totalUnits}\t${row.uniqueSkus}\t${row.total}\n`;
+                    tsvContent += `${row.toteId}\t${row.totalUnits}\t${row.uniqueSkus}\t${row.totalCost}\n`;
                 });
 
                 navigator.clipboard.writeText(tsvContent).then(() => {
@@ -210,7 +214,7 @@
                         return;
                     }
 
-                    // Scan header to find the Quantity column index
+                    // Look for Quantity column index in headers
                     let qtyColumnIndex = -1;
                     const headerCells = targetTable.querySelectorAll('th');
                     headerCells.forEach((th, idx) => {
@@ -220,8 +224,8 @@
                         }
                     });
 
-                    // Collect Product IDs and accumulate their quantities
-                    const productMap = {}; // { ASIN: totalQty }
+                    // Map Product IDs to their total quantities
+                    const productMap = {}; // { ASIN: qty }
                     const rows = targetTable.querySelectorAll('tr');
 
                     rows.forEach((row) => {
@@ -230,7 +234,6 @@
                             const prodId = cells[0].textContent.trim();
 
                             if (prodId && !prodId.toLowerCase().includes('action') && prodId.length >= 4) {
-                                // Extract quantity if column was found, default to 1
                                 let qty = 1;
                                 if (qtyColumnIndex !== -1 && cells[qtyColumnIndex]) {
                                     const parsedQty = parseInt(cells[qtyColumnIndex].textContent.replace(/[^0-9]/g, ''), 10);
@@ -239,7 +242,6 @@
                                     }
                                 }
 
-                                // Add or accumulate quantity for duplicate items
                                 productMap[prodId] = (productMap[prodId] || 0) + qty;
                             }
                         }
@@ -247,23 +249,23 @@
 
                     const entries = Object.entries(productMap);
                     if (entries.length === 0) {
-                        resolve({ total: 0, totalUnits: 0, uniqueCount: 0 });
+                        resolve({ totalCost: 0, totalUnits: 0, uniqueCount: 0 });
                         return;
                     }
 
-                    let toteTotal = 0;
+                    let toteCost = 0;
                     let totalUnits = 0;
 
                     for (const [prodId, qty] of entries) {
                         try {
                             const unitPrice = await getProductPrice(prodId);
-                            toteTotal += (unitPrice * qty);
+                            toteCost += (unitPrice * qty);
                             totalUnits += qty;
                         } catch (e) {}
                     }
 
                     resolve({ 
-                        total: toteTotal, 
+                        totalCost: toteCost, 
                         totalUnits: totalUnits, 
                         uniqueCount: entries.length 
                     });
