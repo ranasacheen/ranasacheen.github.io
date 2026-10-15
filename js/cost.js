@@ -1,10 +1,10 @@
 // ==UserScript==
 // @name         Amazon Tote Price Calculator (Flexible IDs)
-// @namespace    [http://tampermonkey.net/](http://tampermonkey.net/)
-// @version      1.3
+// @namespace    http://tampermonkey.net/
+// @version      1.4
 // @description  Calculates total price from inventory section table with flexible product ID extraction
-// @match        [https://fcresearch-na.aka.amazon.com/](https://fcresearch-na.aka.amazon.com/)*
-// @match        [https://www.amazon.ca/](https://www.amazon.ca/)*
+// @match        https://fcresearch-na.aka.amazon.com/*
+// @match        https://www.amazon.ca/*
 // @connect      fcresearch-na.aka.amazon.com
 // @connect      amazon.ca
 // @grant        GM_xmlhttpRequest
@@ -88,7 +88,7 @@
 
         resultsDiv.innerHTML = 'Fetching container details...';
 
-        const containerUrl = `[https://fcresearch-na.aka.amazon.com/yhm1/results/$](https://fcresearch-na.aka.amazon.com/yhm1/results/$){containerId}`;
+        const containerUrl = `https://fcresearch-na.aka.amazon.com/yhm1/results/${containerId}`;
 
         GM_xmlhttpRequest({
             method: 'GET',
@@ -169,11 +169,11 @@
     });
 
     async function getProductPrice(prodId) {
-        const internalUrl = `[https://fcresearch-na.aka.amazon.com/yhm1/results/product?s=$](https://fcresearch-na.aka.amazon.com/yhm1/results/product?s=$){prodId}`;
+        const internalUrl = `https://fcresearch-na.aka.amazon.com/yhm1/results/product?s=${prodId}`;
         let price = await fetchAndExtractInternalPrice(internalUrl);
         
         if (!price || price === 0) {
-            const externalUrl = `[https://www.amazon.ca/gp/product/$](https://www.amazon.ca/gp/product/$){prodId}`;
+            const externalUrl = `https://www.amazon.ca/gp/product/${prodId}`;
             price = await fetchAndExtractAmazonCaPrice(externalUrl);
         }
 
