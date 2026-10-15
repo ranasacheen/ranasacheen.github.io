@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         Amazon Multi-Tote Price Calculator
+// @name         Amazon Multi-Tote Price Calculator (with Quantity Support)
 // @namespace    http://tampermonkey.net/
-// @version      2.0
-// @description  Calculates total prices for a list of multiple tote/container IDs
+// @version      2.2
+// @description  Calculates total prices for multiple totes, multiplying item price by its quantity
 // @match        https://fcresearch-na.aka.amazon.com/*
 // @match        https://www.amazon.ca/*
 // @connect      fcresearch-na.aka.amazon.com
@@ -14,7 +14,7 @@
 (function() {
     'use strict';
 
-    // Inject UI Styling (updated for textarea)
+    // Inject UI Styling
     GM_addStyle(`
         #tote-price-calc-ui {
             position: fixed;
@@ -55,14 +55,22 @@
             font-weight: bold;
             border-radius: 4px;
             cursor: pointer;
+            margin-top: 5px;
         }
         #tote-price-calc-ui button:hover {
             background: #fa8900;
         }
+        .secondary-btn {
+            background: #37475a !important;
+            color: #fff !important;
+        }
+        .secondary-btn:hover {
+            background: #485c73 !important;
+        }
         #tote-calc-results {
             margin-top: 10px;
             font-size: 12px;
-            max-height: 220px;
+            max-height: 200px;
             overflow-y: auto;
             background: #131a22;
             padding: 8px;
@@ -71,7 +79,9 @@
         }
     `);
 
-    // Create UI Panel with a Textarea for Lists
+    let lastBatchData = [];
+
+    // Create UI Panel
     const uiContainer = document.createElement('div');
     uiContainer.id = 'tote-price-calc-ui';
     uiContainer.innerHTML = `
@@ -79,19 +89,23 @@
         <textarea id="tote-input" placeholder="Enter Container IDs (one per line)&#10;tsx0076888&#10;tsx0076889"></textarea>
         <button id="calc-btn">Calculate All Totes</button>
         <div id="tote-calc-results">Status: Ready</div>
+        <div id="action-container"></div>
     `;
     document.body.appendChild(uiContainer);
 
     document.getElementById('calc-btn').addEventListener('click', async () => {
         const rawInput = document.getElementById('tote-input').value.trim();
         const resultsDiv = document.getElementById('tote-calc-results');
+        const actionContainer = document.getElementById('action-container');
+        
+        actionContainer.innerHTML = '';
+        lastBatchData = [];
 
         if (!rawInput) {
             resultsDiv.innerHTML = 'Error: Please enter at least one container ID.';
             return;
         }
 
-        // Split input by lines, clean whitespaces, and filter empty lines
         const containerIds = rawInput.split('\n')
             .map(id => id.trim())
             .filter(id => id.length > 0);
@@ -113,24 +127,53 @@
             try {
                 const toteResult = await processSingleTote(containerId);
                 grandTotal += toteResult.total;
-                summaryHTML += `<div>• <b>${containerId}</b>: ${toteResult.itemsCount} items | $${toteResult.total.toFixed(2)}</div>`;
+                summaryHTML += `<div>• <b>${containerId}</b>: ${toteResult.totalUnits} units (${toteResult.uniqueCount} SKUs) | $${toteResult.total.toFixed(2)}</div>`;
+                
+                lastBatchData.push({
+                    toteId: containerId,
+                    totalUnits: toteResult.totalUnits,
+                    uniqueSkus: toteResult.uniqueCount,
+                    total: toteResult.total.toFixed(2)
+                });
             } catch (err) {
-                summaryHTML += `<div>• <span style="color: #ff6b6b;"><b>${containerId}</b>: Failed (${err.message})</span></div>`;
+                summaryHTML += `<div>• <span style="color: #ff6b6b;"><b>${containerId}</b>: Failed</span></div>`;
+                lastBatchData.push({
+                    toteId: containerId,
+                    totalUnits: 0,
+                    uniqueSkus: 0,
+                    total: "0.00"
+                });
             }
 
             completedTotes++;
         }
 
-        // Final output summary
         resultsDiv.innerHTML = `
             <b>Batch Complete!</b><br><br>
             ${summaryHTML}
             <hr style="border: 0; border-top: 1px solid #444; margin: 8px 0;">
             <strong>Grand Total: $${grandTotal.toFixed(2)}</strong>
         `;
+
+        if (lastBatchData.length > 0) {
+            const copyBtn = document.createElement('button');
+            copyBtn.className = 'secondary-btn';
+            copyBtn.innerText = '📋 Copy Data for Excel';
+            copyBtn.onclick = () => {
+                let tsvContent = "Tote ID\tTotal Units\tUnique SKUs\tTotal Price\n";
+                lastBatchData.forEach(row => {
+                    tsvContent += `${row.toteId}\t${row.totalUnits}\t${row.uniqueSkus}\t${row.total}\n`;
+                });
+
+                navigator.clipboard.writeText(tsvContent).then(() => {
+                    copyBtn.innerText = '✅ Copied to Clipboard!';
+                    setTimeout(() => { copyBtn.innerText = '📋 Copy Data for Excel'; }, 2000);
+                });
+            };
+            actionContainer.appendChild(copyBtn);
+        }
     });
 
-    // Helper function to process an individual tote ID
     function processSingleTote(containerId) {
         return new Promise((resolve, reject) => {
             const containerUrl = `https://fcresearch-na.aka.amazon.com/yhm1/results/${containerId}`;
@@ -147,7 +190,6 @@
                     const parser = new DOMParser();
                     const doc = parser.parseFromString(response.responseText, 'text/html');
 
-                    // Find the inventory table
                     const tables = doc.querySelectorAll('table');
                     let targetTable = null;
 
@@ -168,38 +210,63 @@
                         return;
                     }
 
-                    // Extract product identifiers
+                    // Scan header to find the Quantity column index
+                    let qtyColumnIndex = -1;
+                    const headerCells = targetTable.querySelectorAll('th');
+                    headerCells.forEach((th, idx) => {
+                        const title = th.textContent.toLowerCase();
+                        if (title.includes('qty') || title.includes('quantity') || title.includes('count')) {
+                            qtyColumnIndex = idx;
+                        }
+                    });
+
+                    // Collect Product IDs and accumulate their quantities
+                    const productMap = {}; // { ASIN: totalQty }
                     const rows = targetTable.querySelectorAll('tr');
-                    const productIds = new Set();
 
                     rows.forEach((row) => {
                         const cells = row.querySelectorAll('td');
                         if (cells.length > 0) {
-                            const firstCellText = cells[0].textContent.trim();
-                            if (firstCellText && !firstCellText.toLowerCase().includes('action') && firstCellText.length >= 4) {
-                                productIds.add(firstCellText);
+                            const prodId = cells[0].textContent.trim();
+
+                            if (prodId && !prodId.toLowerCase().includes('action') && prodId.length >= 4) {
+                                // Extract quantity if column was found, default to 1
+                                let qty = 1;
+                                if (qtyColumnIndex !== -1 && cells[qtyColumnIndex]) {
+                                    const parsedQty = parseInt(cells[qtyColumnIndex].textContent.replace(/[^0-9]/g, ''), 10);
+                                    if (!isNaN(parsedQty) && parsedQty > 0) {
+                                        qty = parsedQty;
+                                    }
+                                }
+
+                                // Add or accumulate quantity for duplicate items
+                                productMap[prodId] = (productMap[prodId] || 0) + qty;
                             }
                         }
                     });
 
-                    const uniqueProducts = Array.from(productIds);
-                    if (uniqueProducts.length === 0) {
-                        resolve({ total: 0, itemsCount: 0 });
+                    const entries = Object.entries(productMap);
+                    if (entries.length === 0) {
+                        resolve({ total: 0, totalUnits: 0, uniqueCount: 0 });
                         return;
                     }
 
-                    // Fetch prices for all items found in this tote
                     let toteTotal = 0;
-                    for (const prodId of uniqueProducts) {
+                    let totalUnits = 0;
+
+                    for (const [prodId, qty] of entries) {
                         try {
-                            const price = await getProductPrice(prodId);
-                            toteTotal += price;
-                        } catch (e) {
-                            // Skip individual item errors
-                        }
+                            const unitPrice = await getProductPrice(prodId);
+                            toteTotal += (unitPrice * qty);
+                            totalUnits += qty;
+                        } catch (e) {}
                     }
 
-                    resolve({ total: toteTotal, itemsCount: uniqueProducts.length });
+                    resolve({ 
+                        total: toteTotal, 
+                        totalUnits: totalUnits, 
+                        uniqueCount: entries.length 
+                    });
                 },
                 onerror: function() {
                     reject(new Error('Network error'));
